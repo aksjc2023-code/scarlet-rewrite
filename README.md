@@ -17,18 +17,19 @@
 
 <p align="center">
   <a href="#-quick-tour--feature-showcase">Feature Tour</a> •
+  <a href="#-why-scarletcut-vs-cloud-editors">Why ScarletCut?</a> •
   <a href="#-architectural-overview--data-flow">Architecture</a> •
   <a href="#-mathematical-formalization-of-the-timeline-engine">Timeline Math</a> •
+  <a href="#-keyboard-shortcuts">Hotkeys</a> •
   <a href="#-technology-stack">Tech Stack</a> •
-  <a href="#-performance-benchmarks--self-healing-runtime">Benchmarks</a> •
   <a href="#-getting-started--local-development">Getting Started</a>
 </p>
 
 ---
 
-<img src="docs/images/hero-multitrack-editor.png" alt="ScarletCut Multi-Track Timeline & Live Video Monitor" width="100%" style="border-radius: 10px; border: 1px solid #2B303A; box-shadow: 0 12px 32px rgba(0,0,0,0.6);" />
+<img src="docs/images/workspace-empty-state.png" alt="ScarletCut Clean Dark-Mode Workspace" width="100%" style="border-radius: 10px; border: 1px solid #2B303A; box-shadow: 0 12px 32px rgba(0,0,0,0.6);" />
 
-*ScarletCut running live in the browser: multi-track editing, interactive sticker overlays, kinetic titles, and realtime audio/video playback.*
+*ScarletCut running 100% in-browser: clean, distraction-free non-linear editing studio with media library, dual-timecode monitor, and 5-track timeline.*
 
 </div>
 
@@ -40,12 +41,29 @@
 
 Traditional video editing workflows are notoriously tedious: scrubbing through hours of footage to manually snip pauses, disfluencies, and bad takes. Existing AI-assisted video editors require expensive cloud subscriptions and compromise privacy by uploading sensitive video and audio to third-party servers.
 
-**ScarletCut eliminates the cloud completely:**
-- **100% Local & Private**: Audio extraction, speech-to-text transcription, timeline slicing, DSP purification, and video rendering happen locally on client hardware.
-- **Zero Cloud Compute Costs**: No API keys, no server queues, and no subscription paywalls.
-- **Sub-Millisecond Text-Driven Editing**: Edit video by simply editing text. Deleting a word or silence interval in the transcript triggers a non-destructive virtual ripple cut in **$<0.4\text{ms}$** without re-encoding.
+> [!IMPORTANT]  
+> **100% Privacy by Design**: All speech transcription, video decoding, timeline transformations, and video exports run entirely on your local machine. No media files, audio buffers, or transcripts are ever transmitted to any remote server or cloud API.
+
+**Key Pillars of ScarletCut:**
+- **Zero Cloud Compute Costs**: No API keys, no server queues, and no subscription paywalls ($0 infrastructure overhead).
+- **Sub-Millisecond Text-Driven Editing**: Edit video simply by editing text. Deleting a word or silence interval in the transcript triggers a non-destructive virtual ripple cut in **$<0.4\text{ms}$** without re-encoding.
 - **Hardware-Accelerated In-Browser ML**: Leverages **WebGPU INT8 Whisper** inference with automatic SIMD WebAssembly CPU fallback.
+- **Multi-Track Compositing with 60fps Playhead**: Direct DOM transform mutations bypass React's virtual DOM reconciliation loop during playback and scrubber scrubbing.
 - **Client-Side Export**: High-speed local video rendering via **FFmpeg WebAssembly** with zero-copy `WORKERFS` RAM mounts and stream-copy fast-paths.
+
+---
+
+## ⚖️ Why ScarletCut? vs Cloud Editors
+
+| Capability | **ScarletCut** (In-Browser) | Descript | CapCut Web | Traditional NLEs (Premiere / Resolve) |
+| :--- | :---: | :---: | :---: | :---: |
+| **Server / Cloud Dependency** | 🟢 **0% (100% Local)** | 🔴 Heavy Cloud Upload | 🔴 Cloud Ingestion | 🟢 Local Only |
+| **Privacy & Data Security** | 🔒 **Zero Data Leaves Device** | ⚠️ Transcripts Sent to Cloud | ⚠️ Server Storage | 🔒 Local Storage |
+| **Pricing / Subscription** | 💸 **Free & Open Source ($0)** | 💳 $24 – $40 / month | 💳 Freemium Paywalls | 💳 $20 – $300+ |
+| **Text-Driven Ripple Cuts** | ⚡ **$<0.4\text{ms}$ Virtual Leap** | ⏱️ Cloud Re-Sync | ❌ Manual Cuts Only | ❌ Manual Cuts Only |
+| **On-Device Whisper ASR** | ⚡ **Direct GPU INT8 Inference** | ❌ Server-Side Speech API | ❌ Server-Side Speech API | ❌ Cloud / Native Only |
+| **Micro-Gap Coalescing** | 🛡️ **$\le 85\text{ms}$ Auto-Merge** | ⚠️ Variable | ❌ Manual | ❌ Manual |
+| **Export Architecture** | 🚀 **WebAssembly + WORKERFS** | ⏱️ Cloud Queue Rendering | ⏱️ Server Queue Rendering | 🚀 Native GPU NVENC/VCE |
 
 ---
 
@@ -55,7 +73,7 @@ Traditional video editing workflows are notoriously tedious: scrubbing through h
 Select words, phrases, or dead-air silences directly in the interactive transcript and press <kbd>Backspace</kbd> to ripple-cut the footage instantaneously.
 
 <div align="center">
-  <img src="docs/images/transcript-editor-ai.png" alt="ScarletCut AI Transcript Editor" width="90%" style="border-radius: 8px; border: 1px solid #2B303A; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
+  <img src="docs/images/transcript-editor-ai.png" alt="ScarletCut AI Transcript Editor" width="92%" style="border-radius: 8px; border: 1px solid #2B303A; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
   <p><em>ScarletCut Transcript Editor: WebGPU device status, silence gap pills (#20.59s), filler word classification, and single-click AI purge actions.</em></p>
 </div>
 
@@ -70,8 +88,8 @@ Select words, phrases, or dead-air silences directly in the interactive transcri
 A fluid, multi-layered non-linear timeline built for smooth 60fps scrubbing and frame-by-frame cuts.
 
 <div align="center">
-  <img src="docs/images/workspace-empty-state.png" alt="ScarletCut Clean Dark-Mode Workspace" width="90%" style="border-radius: 8px; border: 1px solid #2B303A; box-shadow: 0 8px 24px rgba(0,0,0,0.5);" />
-  <p><em>Clean, distraction-free workspace featuring dual-timecode monitoring, multi-track channels, and zero-latency player transport.</em></p>
+  <img src="docs/images/hero-multitrack-editor.png" alt="ScarletCut Multi-Track Timeline & Live Video Monitor" width="95%" style="border-radius: 8px; border: 1px solid #2B303A; box-shadow: 0 10px 28px rgba(0,0,0,0.55);" />
+  <p><em>Active multi-track editing session: live video playback with kinetic typography, on-monitor draggable sticker overlays, and dynamic multi-layer clips on Video, Audio, Captions, Stickers, and Effects tracks.</em></p>
 </div>
 
 - **5 Dedicated Timeline Tracks**:
@@ -90,7 +108,7 @@ A fluid, multi-layered non-linear timeline built for smooth 60fps scrubbing and 
 ### 3. Curated Creative Assets Library (80 Presets)
 ScarletCut includes a built-in production rack of 80 hand-crafted, GPU-accelerated presets:
 
-| Category | Count | Highlights |
+| Category | Count | Highlights & Styling |
 | :--- | :---: | :--- |
 | **Cinematic Filters** | **20** | Cyberpunk Teal & Orange, Noir 1940s, Golden Sunset, 90s Camcorder VHS, Matrix Green, Kodachrome, Emerald Dream, Arctic Frost, Pastel Dream, High Contrast B&W, Sepia Antique, Sunset Heat, Synthwave Violet, Forest Glade, Urban Desat, Crimson Tint, Soft Bloom, Vivid Pop, Twilight Blue, Retro Film. |
 | **Transitions** | **20** | Ripple Push, Zoom Blur Out, Swirl Vortex, Chaos Static, Push Up Warp, Film Burn Dissolve, Whip Pan, Cross Dissolve, Glitch Twitch, Light Leak Flash, Horizontal Slide, Spin Wipe, and more. |
@@ -98,6 +116,23 @@ ScarletCut includes a built-in production rack of 80 hand-crafted, GPU-accelerat
 | **Interactive Stickers** | **20** | Pointing Arrow, Like Button Pulse, Sparkle Burst, Heart React, Fire Flame, Checkmark Circle, Subscribe Bell, Circle Spotlight, Curved Arrow, 100% Score, Warning Hazard, and more. |
 
 - **On-Screen Interactive Canvas Manipulation**: Drag stickers directly on top of the preview video with real-time coordinate badges (`Drag to move (87.1%, 76.7%)`), scale resizing handles, and instant delete badges.
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+Speed up your editing workflow with intuitive keyboard hotkeys:
+
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| <kbd>Space</kbd> | **Play / Pause** | Toggle video and audio playback |
+| <kbd>Backspace</kbd> / <kbd>Delete</kbd> | **Ripple Cut Word** | Prune selected word or silence interval in $<0.4\text{ms}$ |
+| <kbd>Ctrl</kbd> + <kbd>Scroll</kbd> | **Timeline Zoom** | Smooth zoom in / out between $0.2\times$ and $3.5\times$ |
+| <kbd>Shift</kbd> + <kbd>Scroll</kbd> | **Horizontal Pan** | Pan left or right across the multi-track timeline |
+| <kbd>J</kbd> / <kbd>K</kbd> / <kbd>L</kbd> | **Shuttle Transport** | Rewind, pause, or fast-forward playback |
+| <kbd>S</kbd> | **Split Clip** | Slice selected clip cleanly at playhead timestamp |
+| <kbd>M</kbd> | **Mute Track** | Toggle audio mute for the targeted channel |
+| <kbd>L</kbd> | **Lock Track** | Prevent accidental edits or shifts on locked tracks |
 
 ---
 
