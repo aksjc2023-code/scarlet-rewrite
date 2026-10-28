@@ -502,7 +502,7 @@ export async function exportVideoWithFfmpegWasm(
         const noSubComplex = generateFfmpegFilterComplex(segments, { videoScaleFilter: combinedVideoFilterStr || undefined });
         try {
           const retryArgs = [
-            '-i', inputFileName,
+            '-i', effectiveInputPath,
             '-filter_complex', noSubComplex.filterComplex,
             '-map', noSubComplex.videoMap,
             '-map', noSubComplex.audioMap,
@@ -528,7 +528,7 @@ export async function exportVideoWithFfmpegWasm(
           percent: 75,
           memfsAllocatedMb: inputSizeMb,
         });
-        const concatList = generateConcatDemuxerList(segments, inputFileName);
+        const concatList = generateConcatDemuxerList(segments, effectiveInputPath);
         const concatFileName = 'concat_manifest_retry.txt';
         await ffmpeg.writeFile(concatFileName, new TextEncoder().encode(concatList));
         allocatedFiles.add(concatFileName);

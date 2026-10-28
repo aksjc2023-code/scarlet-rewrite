@@ -203,6 +203,16 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   const [stickerPos, setStickerPos] = useState<{ x: number; y: number }>({ x: 50, y: 50 });
   const [stickerScale, setStickerScale] = useState(1.0);
   const [isHoveredSticker, setIsHoveredSticker] = useState(false);
+  const activeDragCleanupRef = useRef<(() => void) | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (activeDragCleanupRef.current) {
+        activeDragCleanupRef.current();
+        activeDragCleanupRef.current = null;
+      }
+    };
+  }, []);
 
   useEffect(() => {
     if (activeSticker) {
@@ -218,6 +228,11 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   const handleStickerPointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
+
     const stage = stageContainerRef.current;
     if (!stage) return;
 
@@ -239,6 +254,12 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
     const handlePointerUp = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      activeDragCleanupRef.current = null;
+    };
+
+    activeDragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -248,6 +269,10 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   const handleStickerResizeDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
 
     const startClientX = e.clientX;
     const initialScale = stickerScale;
@@ -259,6 +284,12 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
     };
 
     const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      activeDragCleanupRef.current = null;
+    };
+
+    activeDragCleanupRef.current = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
@@ -309,6 +340,11 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   const handleTitlePointerDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
+
     const stage = stageContainerRef.current;
     if (!stage) return;
 
@@ -335,6 +371,12 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
     const handlePointerUp = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
+      activeDragCleanupRef.current = null;
+    };
+
+    activeDragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
     };
 
     window.addEventListener('pointermove', handlePointerMove);
@@ -344,6 +386,11 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   const handleTitleCornerResizeDown = (e: React.PointerEvent) => {
     e.stopPropagation();
     e.preventDefault();
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
+
     const startClientX = e.clientX;
     const initScale = titleScale;
 
@@ -358,6 +405,12 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
     };
 
     const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      activeDragCleanupRef.current = null;
+    };
+
+    activeDragCleanupRef.current = () => {
       window.removeEventListener('pointermove', handlePointerMove);
       window.removeEventListener('pointerup', handlePointerUp);
     };
@@ -757,6 +810,42 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
 
   const handleBackward10 = onBackward10 ?? (() => onSeek(Math.max(0, currentTime - 10)));
   const handleForward10 = onForward10 ?? (() => onSeek(Math.min(duration, currentTime + 10)));
+
+  const handleScrubberPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
+    if (!scrubberTrackRef.current || duration <= 0) return;
+    e.preventDefault();
+    if (activeDragCleanupRef.current) {
+      activeDragCleanupRef.current();
+      activeDragCleanupRef.current = null;
+    }
+
+    const updateSeek = (clientX: number) => {
+      if (!scrubberTrackRef.current || duration <= 0) return;
+      const rect = scrubberTrackRef.current.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
+      onSeek(ratio * duration);
+    };
+
+    updateSeek(e.clientX);
+
+    const handlePointerMove = (moveEvt: PointerEvent) => {
+      updateSeek(moveEvt.clientX);
+    };
+
+    const handlePointerUp = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+      activeDragCleanupRef.current = null;
+    };
+
+    activeDragCleanupRef.current = () => {
+      window.removeEventListener('pointermove', handlePointerMove);
+      window.removeEventListener('pointerup', handlePointerUp);
+    };
+
+    window.addEventListener('pointermove', handlePointerMove);
+    window.addEventListener('pointerup', handlePointerUp);
+  };
 
   const handleScrubberClick = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!scrubberTrackRef.current || duration <= 0) return;
@@ -2030,12 +2119,14 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
         <div
           ref={scrubberTrackRef}
           onClick={handleScrubberClick}
+          onPointerDown={handleScrubberPointerDown}
           style={{
             position: 'relative',
             height: '6px',
             backgroundColor: '#2B303A',
             borderRadius: '9999px',
             cursor: 'pointer',
+            touchAction: 'none',
           }}
         >
           {/* Active Blue Progress Fill */}
