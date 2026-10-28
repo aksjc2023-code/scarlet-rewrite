@@ -19,6 +19,7 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
   children,
   className = '',
   disabled,
+  style: customStyle,
   ...props
 }) => {
   // Base Pill Styles
@@ -55,6 +56,7 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
           color: '#FFFFFF',
           border: 'none',
           boxShadow: '0 2px 8px rgba(22, 139, 255, 0.25)',
+          ...customStyle,
         }}
         onMouseEnter={e => {
           if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = '#329AFF';
@@ -72,8 +74,16 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
         className={className}
         {...props}
       >
-        {icon}
-        {children}
+        {icon && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </span>
+        )}
+        {children && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            {children}
+          </span>
+        )}
       </button>
     );
   }
@@ -87,6 +97,7 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
           backgroundColor: '#1E2229',
           color: '#A4B0BE',
           border: '1px solid #454D5B',
+          ...customStyle,
         }}
         onMouseEnter={e => {
           if (!disabled) {
@@ -106,8 +117,16 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
         className={className}
         {...props}
       >
-        {icon}
-        {children}
+        {icon && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </span>
+        )}
+        {children && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            {children}
+          </span>
+        )}
       </button>
     );
   }
@@ -121,6 +140,7 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
           backgroundColor: 'transparent',
           color: '#FFFFFF',
           border: '1px solid #168BFF',
+          ...customStyle,
         }}
         onMouseEnter={e => {
           if (!disabled) (e.currentTarget as HTMLElement).style.backgroundColor = 'rgba(22, 139, 255, 0.15)';
@@ -135,8 +155,16 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
         className={className}
         {...props}
       >
-        {icon}
-        {children}
+        {icon && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </span>
+        )}
+        {children && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            {children}
+          </span>
+        )}
       </button>
     );
   }
@@ -174,8 +202,16 @@ export const ScarletButton: React.FC<ScarletButtonProps> = ({
         disabled={disabled}
         {...props}
       >
-        {icon}
-        {children}
+        {icon && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            {icon}
+          </span>
+        )}
+        {children && (
+          <span style={{ display: 'inline-flex', alignItems: 'center', whiteSpace: 'nowrap' }}>
+            {children}
+          </span>
+        )}
       </button>
       <div style={{ width: '1px', backgroundColor: 'rgba(22, 139, 255, 0.4)' }} />
       <button
