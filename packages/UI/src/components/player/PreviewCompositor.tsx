@@ -20,8 +20,8 @@ export const PreviewCompositor: React.FC<PreviewCompositorProps> = ({
   activeBRoll,
   activeTitles,
   currentTime,
-  width = 1920,
-  height = 1080,
+  width: customWidth,
+  height: customHeight,
   bRollPool,
   aspectRatio = '16:9',
   style,
@@ -29,19 +29,34 @@ export const PreviewCompositor: React.FC<PreviewCompositorProps> = ({
 }) => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
 
+  // Compute canonical canvas dimensions from Aspect Ratio
+  const width = customWidth || (aspectRatio === '9:16' ? 1080 : 1920);
+  const height = customHeight || (aspectRatio === '9:16' ? 1920 : 1080);
+
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
     const ctx = canvas.getContext('2d', { alpha: false });
     if (!ctx) return;
 
+    let cancelled = false;
     let animId: number;
+    let rvfcId: number;
 
     const renderFrame = () => {
       // 1. Draw Master A-Roll Base Video
       const aRoll = aRollVideoRef.current;
       if (aRoll && aRoll.readyState >= 2) {
-        ctx.drawImage(aRoll, 0, 0, width, height);
+        if (aspectRatio === '9:16' && aRoll.videoWidth > aRoll.videoHeight) {
+          // Center-crop 16:9 into 9:16 vertical canvas
+          const srcAspect = aRoll.videoWidth / aRoll.videoHeight;
+          const targetAspect = 9 / 16;
+          const srcW = aRoll.videoHeight * targetAspect;
+          const srcX = (aRoll.videoWidth - srcW) / 2;
+          ctx.drawImage(aRoll, srcX, 0, srcW, aRoll.videoHeight, 0, 0, width, height);
+        } else {
+          ctx.drawImage(aRoll, 0, 0, width, height);
+        }
       } else {
         ctx.fillStyle = '#0f172a';
         ctx.fillRect(0, 0, width, height);
@@ -53,7 +68,7 @@ export const PreviewCompositor: React.FC<PreviewCompositorProps> = ({
         if (bRollVideo && bRollVideo.readyState >= 2) {
           ctx.save();
 
-          // Calculate Transitions (Fade / Crossfade / Slide)
+          // Calculate Transitions (Fade / Crossfade / Slide / Zoom)
           let opacity = activeBRoll.transform.opacity ?? 1.0;
           const timeSinceStart = currentTime - activeBRoll.timelineStart;
           const timeUntilEnd = activeBRoll.timelineEnd - currentTime;
@@ -109,19 +124,40 @@ export const PreviewCompositor: React.FC<PreviewCompositorProps> = ({
       // 3. Render Kinetic Text Titles & Overlays
       for (const title of activeTitles) {
         ctx.save();
+
+        const timeSinceStart = currentTime - title.timelineStart;
+        let animatedText = title.text;
+        let titleOpacity = 1.0;
+        let titleOffsetY = 0;
+
+        // Kinetic text animations: typewriter, fade_pop, slide_up
+        if (title.style.animation === 'typewriter') {
+          const charProgress = Math.min(1, Math.max(0, timeSinceStart / 0.8));
+          const numChars = Math.floor(charProgress * title.text.length);
+          animatedText = title.text.slice(0, numChars);
+        } else if (title.style.animation === 'fade_pop') {
+          const popProgress = Math.min(1, Math.max(0, timeSinceStart / 0.3));
+          titleOpacity = popProgress;
+        } else if (title.style.animation === 'slide_up') {
+          const slideProgress = Math.min(1, Math.max(0, timeSinceStart / 0.35));
+          titleOffsetY = (1 - slideProgress) * 40;
+          titleOpacity = slideProgress;
+        }
+
+        ctx.globalAlpha = titleOpacity;
         ctx.font = `bold ${title.style.fontSize}px ${title.style.fontFamily || 'Inter, sans-serif'}`;
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
 
-        let posY = height * 0.85; // Lower third default
-        if (title.style.position === 'center') posY = height * 0.5;
-        if (title.style.position === 'top_banner') posY = height * 0.15;
+        let posY = height * 0.85 + titleOffsetY; // Lower third default
+        if (title.style.position === 'center') posY = height * 0.5 + titleOffsetY;
+        if (title.style.position === 'top_banner') posY = height * 0.15 + titleOffsetY;
         if (title.style.position === 'custom' && title.style.customY !== undefined) {
-          posY = title.style.customY * height;
+          posY = title.style.customY * height + titleOffsetY;
         }
 
         const posX = width * 0.5;
-        const textMetrics = ctx.measureText(title.text);
+        const textMetrics = ctx.measureText(animatedText);
 
         // Background card
         if (title.style.backgroundColor) {
@@ -140,20 +176,41 @@ export const PreviewCompositor: React.FC<PreviewCompositorProps> = ({
         if (title.style.strokeColor && title.style.strokeWidth) {
           ctx.strokeStyle = title.style.strokeColor;
           ctx.lineWidth = title.style.strokeWidth;
-          ctx.strokeText(title.text, posX, posY);
+          ctx.strokeText(animatedText, posX, posY);
         }
 
         ctx.fillStyle = title.style.color || '#ffffff';
-        ctx.fillText(title.text, posX, posY);
+        ctx.fillText(animatedText, posX, posY);
         ctx.restore();
       }
-
-      animId = requestAnimationFrame(renderFrame);
     };
 
-    animId = requestAnimationFrame(renderFrame);
-    return () => cancelAnimationFrame(animId);
-  }, [activeBRoll, activeTitles, currentTime, width, height, aRollVideoRef, bRollPool]);
+    // Use requestVideoFrameCallback when supported on Chromium, falling back to rAF
+    const aRoll = aRollVideoRef.current;
+    if (aRoll && typeof (aRoll as any).requestVideoFrameCallback === 'function') {
+      const onFrame = () => {
+        if (cancelled) return;
+        renderFrame();
+        rvfcId = (aRoll as any).requestVideoFrameCallback(onFrame);
+      };
+      rvfcId = (aRoll as any).requestVideoFrameCallback(onFrame);
+    } else {
+      const loop = () => {
+        if (cancelled) return;
+        renderFrame();
+        animId = requestAnimationFrame(loop);
+      };
+      animId = requestAnimationFrame(loop);
+    }
+
+    return () => {
+      cancelled = true;
+      if (animId) cancelAnimationFrame(animId);
+      if (rvfcId && aRoll && typeof (aRoll as any).cancelVideoFrameCallback === 'function') {
+        (aRoll as any).cancelVideoFrameCallback(rvfcId);
+      }
+    };
+  }, [activeBRoll, activeTitles, currentTime, width, height, aRollVideoRef, bRollPool, aspectRatio]);
 
   return (
     <canvas

@@ -12,6 +12,7 @@ import {
   asSourceSeconds,
   processVocalPurifierPcm,
   alignWhisperChunksToWordTokens,
+  analyze16kHzPcmSinglePass,
 } from '@astral/core';
 
 export interface TranscribeProgressCallback {
@@ -103,6 +104,8 @@ export async function extract16kHzPcmFromMedia(
   return purifiedPcm;
 }
 
+export const extract16kHzMonoPCM = extract16kHzPcmFromMedia;
+
 /**
  * Transcribes audio using WebGPU Whisper with transparent WASM SIMD CPU fallback.
  * Uses overlapped 28s + 2s stride chunking for long audio to avoid word-boundary cuts,
@@ -127,8 +130,12 @@ export async function transcribeMediaFile(
     throw new Error(`Media file exceeds 750MB limit (${sizeMb} MB). Please choose a smaller file.`);
   }
 
-  onProgress?.('Extracting and downsampling audio to 16kHz PCM...', 10);
+  onProgress?.('Extracting and downsampling audio to 16kHz PCM via native Web Audio...', 10);
   const pcm = await extract16kHzPcmFromMedia(fileOrBlob, (msg, pct) => onProgress?.(msg, pct));
+
+  // Run single-pass PCM analyzer (<10ms) for waveform mipmaps & silence detection
+  const analysis = analyze16kHzPcmSinglePass(pcm);
+  console.log(`[Whisper Analyzer] Duration: ${analysis.durationSec}s, Silences >0.5s: ${analysis.silenceIntervals.length}, Speech spans: ${analysis.speechSegments.length}`);
 
   onProgress?.(`Initializing WebGPU / ONNX Whisper Pipeline (${modelId.replace('Xenova/', '')})...`, 28);
   const engine = new OfflineWhisperEngine({
@@ -154,9 +161,10 @@ export async function transcribeMediaFile(
           : 1;
       }
 
-      console.log(`[Whisper] Initializing ASR pipeline for ${modelId} on ${device.toUpperCase()}...`);
+      console.log(`[Whisper] Initializing ASR pipeline for ${modelId} on ${device.toUpperCase()} with quantized INT8/FP16 weights...`);
       asrPipeline = await pipeline('automatic-speech-recognition', modelId, {
         device,
+        dtype: device === 'webgpu' ? 'fp16' : 'q8',
         progress_callback: (p: any) => {
           if (p && p.status === 'progress' && typeof p.progress === 'number') {
             const pct = Math.round(30 + p.progress * 0.35);

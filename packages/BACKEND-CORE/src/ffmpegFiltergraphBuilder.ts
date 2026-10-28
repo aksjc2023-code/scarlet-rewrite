@@ -132,7 +132,9 @@ export function buildFFmpegMultiTrackArgs(params: MultiTrackExportParams): strin
   resultArgs.push(
     '-c:v', 'libx264',
     '-preset', 'ultrafast',
-    '-crf', '22',
+    '-tune', 'zerolatency',
+    '-crf', '23',
+    '-pix_fmt', 'yuv420p',
     '-c:a', 'aac',
     '-b:a', '192k',
     '-y', outputFilename

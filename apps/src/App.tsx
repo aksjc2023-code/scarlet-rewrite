@@ -66,6 +66,7 @@ import {
 } from '@astral/ui-editor';
 
 import { transcribeMediaFile, checkWebGpuAvailability, extract16kHzPcmFromMedia } from './services/whisperService';
+import { prewarmWorkers } from './services/prewarmService';
 import {
   exportVideoWithFfmpegWasm,
   exportCompositionWithFfmpegWasm,
@@ -95,8 +96,9 @@ export const App: React.FC = () => {
   const [webGpuDeviceName, setWebGpuDeviceName] = useState<string | null>(null);
   const [transcriptionError, setTranscriptionError] = useState<string | null>(null);
 
-  // Detect WebGPU hardware availability on mount
+  // Detect WebGPU hardware availability & pre-warm workers on mount (Phase 5 Item 5)
   useEffect(() => {
+    prewarmWorkers();
     checkWebGpuAvailability().then(res => {
       if (res.supported && res.adapterName) {
         setWebGpuDeviceName(res.adapterName);
@@ -864,6 +866,20 @@ export const App: React.FC = () => {
     };
     setClips(prev => [...prev, newTimelineClip]);
   }, [tokensByMedia, activeTranscriptMediaId, bRollClips, titleClips, audioConfig, pushHistory, clips]);
+
+  // Keyword-Anchored Audio Ducking from Transcript Selection
+  const handleDuckAudioKeywords = useCallback((selectedWordIds: string[], keywords: string[]) => {
+    if (selectedWordIds.length === 0) return;
+    setAudioConfig(prev => {
+      const existing = prev.duckKeywords || [];
+      const updated = Array.from(new Set([...existing, ...keywords]));
+      return {
+        ...prev,
+        duckKeywords: updated,
+        duckOnSpeech: true,
+      };
+    });
+  }, []);
 
   // Inline TTS Word Replacement (Softablitz A2)
   const handleEditTokenText = useCallback((tokenId: string, newText: string) => {
@@ -2459,6 +2475,7 @@ export const App: React.FC = () => {
               onAutoClean={handleAutoClean}
               onInsertBRoll={handleInsertBRollFromTranscript}
               onInsertTitle={handleInsertTitleFromTranscript}
+              onDuckAudioKeywords={handleDuckAudioKeywords}
             />
           ) : activeDockTab === 'media' && activeSubNav === 'import' ? (
             /* View C: Import Dropzone with Real Files */

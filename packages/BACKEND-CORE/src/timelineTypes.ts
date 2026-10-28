@@ -61,6 +61,8 @@ export interface TitleClip extends BaseClip {
 export interface AudioTrackConfig {
   id: string;
   sourceUrl: string;
+  bgmFile?: File | Blob;
+  bgmUrl?: string;
   baseVolume: number;    // 0.0 to 1.0 (default e.g. 0.7)
   duckedVolume: number;  // 0.0 to 1.0 (default e.g. 0.15)
   rampUpTime: number;    // Lookahead/fade-out in seconds (e.g. 0.25)
@@ -68,6 +70,8 @@ export interface AudioTrackConfig {
   duckOnSpeech: boolean; // Auto-duck when A-Roll has voice
   duckKeywords?: string[]; // Extra aggressive ducking or SFX trigger
 }
+
+export type AudioDuckingConfig = AudioTrackConfig;
 
 export interface TranscriptWordRef {
   id: string;

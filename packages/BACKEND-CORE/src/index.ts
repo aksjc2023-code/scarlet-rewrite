@@ -12,4 +12,5 @@ export * from './timelineTypes';
 export * from './bRollAnchorService';
 export * from './ffmpegFiltergraphBuilder';
 export * from './audioEnhancementPipeline';
-
+export * from './fastTimelineCursor';
+export * from './pcmAnalyzer';

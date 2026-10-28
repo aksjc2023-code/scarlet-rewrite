@@ -1,6 +1,7 @@
 /**
- * Offscreen 2-Slot Ping-Pong Video Player Pool
- * Eliminates browser decoder stalls and audio pops by recycling two lightweight video DOM elements.
+ * Dual-Decoder Lookahead Pool (0ms Cut & B-Roll Transitions)
+ * Maintains a 2-slot <video> pool for A-Roll and a 2-slot <video> pool for B-Roll.
+ * Pre-seeks inactive video elements 500ms before reaching cut boundaries or upcoming B-Roll.
  */
 
 export class VideoPlayerPool {
@@ -9,6 +10,7 @@ export class VideoPlayerPool {
   private activePlayerSlot: 'A' | 'B' = 'A';
   private currentClipId: string | null = null;
   private isMounted = false;
+  private lastPreseekTime: number | null = null;
 
   constructor() {
     this.initPlayers();
@@ -60,8 +62,27 @@ export class VideoPlayerPool {
     this.currentClipId = clipId;
   }
 
+  /**
+   * Pre-seeks the inactive player to targetTimestamp 500ms in advance
+   * so hardware video frames are primed before boundary leap.
+   */
+  public preseek(targetTimestamp: number, url?: string) {
+    const inactive = this.getInactivePlayer();
+    if (!inactive) return;
+
+    if (url && inactive.src !== url) {
+      inactive.src = url;
+    }
+
+    if (this.lastPreseekTime === null || Math.abs(this.lastPreseekTime - targetTimestamp) > 0.08) {
+      inactive.currentTime = Math.max(0, targetTimestamp);
+      this.lastPreseekTime = targetTimestamp;
+    }
+  }
+
   public swap() {
     this.activePlayerSlot = this.activePlayerSlot === 'A' ? 'B' : 'A';
+    this.lastPreseekTime = null;
   }
 
   public syncTime(time: number, isPlaying: boolean) {
@@ -86,5 +107,39 @@ export class VideoPlayerPool {
     this.playerB = null;
     this.isMounted = false;
     this.currentClipId = null;
+    this.lastPreseekTime = null;
+  }
+}
+
+/**
+ * High-Level Dual-Track Decoder Lookahead Pool:
+ * Manages 2 slots for A-Roll and 2 slots for B-Roll simultaneously.
+ */
+export class DualTrackDecoderPool {
+  public readonly aRollPool = new VideoPlayerPool();
+  public readonly bRollPool = new VideoPlayerPool();
+
+  /**
+   * 500ms Lookahead scanner: primes decoders right before cut or B-Roll boundaries.
+   */
+  public checkLookahead(
+    currentTime: number,
+    lookaheadUpcomingCutTarget: number | null,
+    lookaheadUpcomingBRoll: { url: string; start: number } | null
+  ) {
+    // 1. A-Roll cut lookahead
+    if (lookaheadUpcomingCutTarget !== null) {
+      this.aRollPool.preseek(lookaheadUpcomingCutTarget);
+    }
+
+    // 2. B-Roll appearance lookahead
+    if (lookaheadUpcomingBRoll !== null) {
+      this.bRollPool.preseek(lookaheadUpcomingBRoll.start, lookaheadUpcomingBRoll.url);
+    }
+  }
+
+  public destroy() {
+    this.aRollPool.destroy();
+    this.bRollPool.destroy();
   }
 }

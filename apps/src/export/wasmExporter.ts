@@ -275,15 +275,43 @@ export async function exportVideoWithFfmpegWasm(
     ffmpeg.on('progress', progressHandler);
 
     try {
-      onProgress?.({
-        stage: `Allocating MEMFS virtual file: ${inputFileName} (${inputSizeMb} MB)...`,
-        percent: 15,
-        memfsAllocatedMb: inputSizeMb,
-        log: `[MEMFS] Allocated virtual buffer: ${inputFileName} (${inputSizeMb} MB)`,
-      });
-      const mediaData = await fetchFile(mediaBlob);
-      await ffmpeg.writeFile(inputFileName, mediaData);
-      allocatedFiles.add(inputFileName);
+      let workerFsMounted = false;
+      let effectiveInputPath = inputFileName;
+
+      try {
+        if (typeof (ffmpeg as any).mount === 'function' && (mediaBlob instanceof File || (mediaBlob as any).name)) {
+          const originalName = (mediaBlob as File).name || 'source_media.mp4';
+          try {
+            await (ffmpeg as any).createDir('/mnt');
+          } catch {}
+          await (ffmpeg as any).mount('WORKERFS', {
+            files: [mediaBlob],
+          }, '/mnt');
+          effectiveInputPath = `/mnt/${originalName}`;
+          workerFsMounted = true;
+          onProgress?.({
+            stage: `Zero-copy WORKERFS mounted: ${effectiveInputPath}`,
+            percent: 15,
+            memfsAllocatedMb: 0,
+            log: `[WORKERFS] Direct file mount active at ${effectiveInputPath}. 0MB RAM duplication.`,
+          });
+        }
+      } catch (mntErr) {
+        console.warn('[WASM Exporter] Direct WORKERFS mount unavailable, falling back to MEMFS:', mntErr);
+      }
+
+      if (!workerFsMounted) {
+        onProgress?.({
+          stage: `Allocating MEMFS virtual file: ${inputFileName} (${inputSizeMb} MB)...`,
+          percent: 15,
+          memfsAllocatedMb: inputSizeMb,
+          log: `[MEMFS] Allocated virtual buffer: ${inputFileName} (${inputSizeMb} MB)`,
+        });
+        const mediaData = await fetchFile(mediaBlob);
+        await ffmpeg.writeFile(inputFileName, mediaData);
+        allocatedFiles.add(inputFileName);
+        effectiveInputPath = inputFileName;
+      }
 
       let ffmpegArgs: string[] = [];
 
@@ -292,8 +320,93 @@ export async function exportVideoWithFfmpegWasm(
       const combinedVideoFilterStr = customVideoFilters.join(',');
       const hasCustomVideoStyling = customVideoFilters.length > 0;
 
-      if (mode === 'stream-copy' && !hasCustomVideoStyling && segments.length > 0) {
-        const concatList = generateConcatDemuxerList(segments, inputFileName);
+      const hasMultiTrackOverlays = Boolean(
+        (options.bRollClips && options.bRollClips.length > 0) ||
+        (options.titleClips && options.titleClips.length > 0) ||
+        options.audioConfig?.bgmUrl ||
+        options.audioConfig?.bgmFile
+      );
+
+      if (hasMultiTrackOverlays && segments.length > 0) {
+        // Mode B — Multi-Track Overlays Present (B-Roll, Titles, Transitions, Ducking)
+        onProgress?.({
+          stage: 'Mode B: Stream-copying base A-Roll and rendering multi-track overlays...',
+          percent: 25,
+          memfsAllocatedMb: inputSizeMb,
+        });
+
+        // Stage 1: Stream-copy A-Roll trimmed base (lossless & instant)
+        const arollTrimmedFile = 'aroll_trimmed.mp4';
+        if (segments.length === 1) {
+          const s = segments[0]!;
+          await ffmpeg.exec([
+            '-ss', s.sourceStart.toFixed(3),
+            '-to', s.sourceEnd.toFixed(3),
+            '-i', effectiveInputPath,
+            '-c', 'copy',
+            arollTrimmedFile,
+          ]);
+        } else {
+          const concatList = generateConcatDemuxerList(segments, effectiveInputPath);
+          const concatManifest = 'aroll_concat.txt';
+          await ffmpeg.writeFile(concatManifest, new TextEncoder().encode(concatList));
+          allocatedFiles.add(concatManifest);
+          await ffmpeg.exec([
+            '-f', 'concat',
+            '-safe', '0',
+            '-i', concatManifest,
+            '-c', 'copy',
+            arollTrimmedFile,
+          ]);
+        }
+        allocatedFiles.add(arollTrimmedFile);
+
+        // Stage 2: Ingest B-Roll sources
+        const bRolls = options.bRollClips || [];
+        for (let bIdx = 0; bIdx < bRolls.length; bIdx++) {
+          const bClip = bRolls[bIdx]!;
+          const bFileName = `broll_${bIdx}.mp4`;
+          if (bClip.sourceFile) {
+            const bData = await fetchFile(bClip.sourceFile);
+            await ffmpeg.writeFile(bFileName, bData);
+            allocatedFiles.add(bFileName);
+          } else if (bClip.sourceUrl) {
+            const bData = await fetchFile(bClip.sourceUrl);
+            await ffmpeg.writeFile(bFileName, bData);
+            allocatedFiles.add(bFileName);
+          }
+        }
+
+        // Stage 3: Ingest Background Music if present
+        if (options.audioConfig?.bgmFile) {
+          const bgData = await fetchFile(options.audioConfig.bgmFile);
+          await ffmpeg.writeFile('bg_music.mp3', bgData);
+          allocatedFiles.add('bg_music.mp3');
+        } else if (options.audioConfig?.bgmUrl) {
+          try {
+            const bgData = await fetchFile(options.audioConfig.bgmUrl);
+            await ffmpeg.writeFile('bg_music.mp3', bgData);
+            allocatedFiles.add('bg_music.mp3');
+          } catch {}
+        }
+
+        // Stage 4: Run Targeted Filtergraph via buildFFmpegMultiTrackArgs
+        const totalDuration = segments.reduce((sum, s) => sum + s.duration, 0);
+        ffmpegArgs = buildFFmpegMultiTrackArgs({
+          aRollDuration: totalDuration,
+          bRolls,
+          titles: options.titleClips || [],
+          bgAudio: options.audioConfig,
+          outputFilename: outputFileName,
+        });
+      } else if (mode === 'stream-copy' && !hasCustomVideoStyling && segments.length > 0) {
+        // Mode A — Clean Cuts & Filler/Silence Pruning Only (No Visual Overlays)
+        onProgress?.({
+          stage: 'Mode A: Executing fast stream-copy slicing (-c copy)...',
+          percent: 25,
+          memfsAllocatedMb: inputSizeMb,
+        });
+        const concatList = generateConcatDemuxerList(segments, effectiveInputPath);
         const concatFileName = 'concat_manifest.txt';
         await ffmpeg.writeFile(concatFileName, new TextEncoder().encode(concatList));
         allocatedFiles.add(concatFileName);
@@ -321,7 +434,7 @@ export async function exportVideoWithFfmpegWasm(
           });
 
           ffmpegArgs = [
-            '-i', inputFileName,
+            '-i', effectiveInputPath,
             '-filter_complex', filterComplex,
             '-map', videoMap,
             '-map', audioMap,
@@ -335,7 +448,7 @@ export async function exportVideoWithFfmpegWasm(
           ];
         } else if (ext === 'mp3') {
           ffmpegArgs = [
-            '-i', inputFileName,
+            '-i', effectiveInputPath,
             '-vn',
             '-c:a', 'libmp3lame',
             '-b:a', '256k',
@@ -343,13 +456,13 @@ export async function exportVideoWithFfmpegWasm(
           ];
         } else if (ext === 'gif') {
           ffmpegArgs = [
-            '-i', inputFileName,
+            '-i', effectiveInputPath,
             '-vf', combinedVideoFilterStr ? `${combinedVideoFilterStr},fps=12` : 'fps=12,scale=480:-1:flags=lanczos',
             outputFileName,
           ];
         } else {
           ffmpegArgs = [
-            '-i', inputFileName,
+            '-i', effectiveInputPath,
             ...(combinedVideoFilterStr ? ['-vf', combinedVideoFilterStr] : []),
             '-c:v', 'libx264',
             '-preset', 'ultrafast',
@@ -460,6 +573,12 @@ export async function exportVideoWithFfmpegWasm(
       };
     } finally {
       ffmpeg.off('progress', progressHandler);
+      if (workerFsMounted) {
+        try {
+          await (ffmpeg as any).unmount('/mnt');
+          await (ffmpeg as any).deleteDir('/mnt');
+        } catch {}
+      }
       for (const vFile of allocatedFiles) {
         try {
           await ffmpeg.deleteFile(vFile);

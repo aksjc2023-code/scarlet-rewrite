@@ -43,9 +43,10 @@ export class AudioDuckingEngine {
   }
 
   public updateDuckingState(
-    _currentTime: number,
+    currentTime: number,
     isVoicePresent: boolean,
-    config: DuckingConfig = { baseVolume: 0.7, duckedVolume: 0.15, rampDuration: 0.25 }
+    config: DuckingConfig = { baseVolume: 0.7, duckedVolume: 0.15, rampDuration: 0.25 },
+    duckSpans?: Array<{ start: number; end: number }>
   ) {
     if (!this.audioCtx || !this.bgGainNode) return;
 
@@ -55,9 +56,11 @@ export class AudioDuckingEngine {
     }
 
     const now = this.audioCtx.currentTime;
+    const isKeywordDucked = duckSpans ? duckSpans.some(s => currentTime >= s.start && currentTime <= s.end) : false;
+    const shouldDuck = isVoicePresent || isKeywordDucked;
 
-    if (isVoicePresent && !this.isDucked) {
-      // Voice detected -> Duck background volume smoothly
+    if (shouldDuck && !this.isDucked) {
+      // Voice or designated keyword span detected -> Duck background volume smoothly
       this.bgGainNode.gain.cancelScheduledValues(now);
       this.bgGainNode.gain.setValueAtTime(this.bgGainNode.gain.value, now);
       this.bgGainNode.gain.linearRampToValueAtTime(
@@ -65,8 +68,8 @@ export class AudioDuckingEngine {
         now + config.rampDuration
       );
       this.isDucked = true;
-    } else if (!isVoicePresent && this.isDucked) {
-      // Voice paused/ended -> Restore background volume smoothly
+    } else if (!shouldDuck && this.isDucked) {
+      // Voice & keywords ended -> Restore background volume smoothly
       this.bgGainNode.gain.cancelScheduledValues(now);
       this.bgGainNode.gain.setValueAtTime(this.bgGainNode.gain.value, now);
       this.bgGainNode.gain.linearRampToValueAtTime(

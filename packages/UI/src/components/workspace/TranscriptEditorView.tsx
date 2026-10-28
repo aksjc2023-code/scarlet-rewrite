@@ -27,6 +27,7 @@ export interface TranscriptEditorViewProps {
   onAutoClean?: () => Promise<void>;
   onInsertBRoll?: (selectedWordIds: string[], sourceFile: File) => void;
   onInsertTitle?: (selectedWordIds: string[], titleText: string) => void;
+  onDuckAudioKeywords?: (selectedWordIds: string[], keywords: string[]) => void;
 }
 
 export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
@@ -52,6 +53,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   onAutoClean,
   onInsertBRoll,
   onInsertTitle,
+  onDuckAudioKeywords,
 }) => {
   const bRollFileInputRef = useRef<HTMLInputElement>(null);
   const [showMediaDropdown, setShowMediaDropdown] = useState(false);
@@ -71,16 +73,30 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   // Throttle active token evaluation to ~10Hz (every 100ms) instead of 60Hz to prevent 60fps React re-render thrashing
   const [activeTokenId, setActiveTokenId] = useState<string | null>(null);
   const lastActiveCheckTimeRef = useRef(0);
+  const activeKaraokeElRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
+    // Phase 5: Transient DOM Highlighting - Direct manipulation outside React render cycle
+    const match = tokens.find(t => !t.deleted && currentTime >= t.start && currentTime <= t.end);
+    const nextEl = match ? document.getElementById(`word-token-${match.id}`) : null;
+
+    if (activeKaraokeElRef.current !== nextEl) {
+      if (activeKaraokeElRef.current) {
+        activeKaraokeElRef.current.classList.remove('active-karaoke-token');
+      }
+      if (nextEl) {
+        nextEl.classList.add('active-karaoke-token');
+      }
+      activeKaraokeElRef.current = nextEl;
+    }
+
     const now = performance.now();
-    // Throttle checks during high-frequency playback updates to 100ms
+    // Throttle React state updates to 100ms to eliminate 60fps render cascades
     if (now - lastActiveCheckTimeRef.current < 100) {
       return;
     }
     lastActiveCheckTimeRef.current = now;
 
-    const match = tokens.find(t => !t.deleted && currentTime >= t.start && currentTime <= t.end);
     const newId = match ? match.id : null;
     setActiveTokenId(prev => prev === newId ? prev : newId);
   }, [currentTime, tokens]);
@@ -264,6 +280,16 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
       onInsertTitle(Array.from(selectedTokenIds), text.trim());
       setSelectedTokenIds(new Set());
     }
+  };
+
+  const handleDuckAudio = () => {
+    if (selectedTokenIds.size === 0 || !onDuckAudioKeywords) return;
+    const ids = Array.from(selectedTokenIds);
+    const keywords = tokens
+      .filter(t => selectedTokenIds.has(t.id))
+      .map(t => t.text.toLowerCase().trim().replace(/^[^\w]+|[^\w]+$/g, ''))
+      .filter(Boolean);
+    onDuckAudioKeywords(ids, keywords);
   };
 
   return (
@@ -525,6 +551,19 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
                   🔤 Insert Title Card
                 </ScarletButton>
               )}
+              {onDuckAudioKeywords && (
+                <ScarletButton
+                  id="btn-duck-audio-selection"
+                  data-testid="btn-duck-audio-selection"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleDuckAudio}
+                  style={{ color: '#A55EEA', borderColor: '#A55EEA' }}
+                  title="Duck background audio during this spoken keyword span"
+                >
+                  🔊 Duck Audio Here
+                </ScarletButton>
+              )}
               <ScarletButton
                 id="btn-cut-selected-tokens"
                 variant="additional-v2"
@@ -784,8 +823,17 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
           fontSize: '15px',
           userSelect: 'none',
           minHeight: '200px',
+          contentVisibility: 'auto' as any,
+          containIntrinsicSize: '0 400px',
         }}
       >
+        <style>{`
+          .active-karaoke-token {
+            background-color: #168BFF !important;
+            border-color: #329AFF !important;
+            color: #FFFFFF !important;
+          }
+        `}</style>
         {tokens.map((token) => {
           const isKaraokeActive = activeToken?.id === token.id;
           const isSelected = selectedTokenIds.has(token.id);
