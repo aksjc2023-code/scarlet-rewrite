@@ -50,6 +50,9 @@ export const INITIAL_TOOL_SETTINGS: ToolSettings = {
     preset: 'Vocal Purifier Active',
     bands: [0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
     vocalPurifierEnabled: false,
+    audioEnhancementEnabled: true,
+    silenceThresholdSec: 1.0,
+    boundaryPaddingMs: 15,
   },
   overlay: {
     mode: 'none',

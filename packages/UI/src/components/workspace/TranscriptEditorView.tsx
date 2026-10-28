@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { WordToken, MediaAsset } from '@astral/core';
 import { ScarletButton } from '../common/ScarletButton';
-import { IconLightning, IconSparkles } from '../common/ScarletIcons';
+import { IconSparkles } from '../common/ScarletIcons';
+import { AutoCleanButton } from './AutoCleanButton';
 
 export interface TranscriptEditorViewProps {
   tokens: WordToken[];
@@ -11,7 +12,6 @@ export interface TranscriptEditorViewProps {
   onSelectMediaId?: (mediaId: string) => void;
   onToggleDeleteToken: (tokenId: string) => void;
   onToggleDeleteMultipleTokens?: (tokenIds: string[]) => void;
-  onPurgeFillers: () => void;
   onRestoreAllTokens: () => void;
   onEditTokenText?: (tokenId: string, newText: string) => void;
   onSeekToTime?: (time: number) => void;
@@ -24,6 +24,9 @@ export interface TranscriptEditorViewProps {
   transcriptionError?: string | null;
   onClearTranscriptionError?: () => void;
   onSummarizeKeyPoints?: () => void;
+  onAutoClean?: () => Promise<void>;
+  onInsertBRoll?: (selectedWordIds: string[], sourceFile: File) => void;
+  onInsertTitle?: (selectedWordIds: string[], titleText: string) => void;
 }
 
 export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
@@ -34,7 +37,6 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   onSelectMediaId,
   onToggleDeleteToken,
   onToggleDeleteMultipleTokens,
-  onPurgeFillers,
   onRestoreAllTokens,
   onEditTokenText,
   onSeekToTime,
@@ -47,7 +49,11 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   transcriptionError,
   onClearTranscriptionError,
   onSummarizeKeyPoints,
+  onAutoClean,
+  onInsertBRoll,
+  onInsertTitle,
 }) => {
+  const bRollFileInputRef = useRef<HTMLInputElement>(null);
   const [showMediaDropdown, setShowMediaDropdown] = useState(false);
   const activeAsset = mediaAssets?.find(a => a.id === activeMediaId);
   const [editingTokenId, setEditingTokenId] = useState<string | null>(null);
@@ -90,8 +96,9 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
     () => deletedTokens.reduce((sum: number, t: WordToken) => sum + Math.max(0, t.end - t.start), 0),
     [deletedTokens]
   );
-  const fillerCount = useMemo(() => tokens.filter(t => t.isFiller || t.isPause).length, [tokens]);
+  const hardFillerCount = useMemo(() => tokens.filter(t => t.isFiller && !t.isPause).length, [tokens]);
   const discourseCount = useMemo(() => tokens.filter(t => t.isDiscourseMarker && !t.isFiller).length, [tokens]);
+  const pauseCount = useMemo(() => tokens.filter(t => t.isPause).length, [tokens]);
 
   // Mouse Drag-to-Select State (Page 2 & Whisper text-editor precision)
   const [isMouseSelecting, setIsMouseSelecting] = useState(false);
@@ -237,6 +244,26 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
       idsToCut.forEach(id => onToggleDeleteToken(id));
     }
     setSelectedTokenIds(new Set());
+  };
+
+  const handleBRollFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file && selectedTokenIds.size > 0 && onInsertBRoll) {
+      onInsertBRoll(Array.from(selectedTokenIds), file);
+      setSelectedTokenIds(new Set());
+    }
+    e.target.value = '';
+  };
+
+  const handleInsertTitle = () => {
+    if (selectedTokenIds.size === 0 || !onInsertTitle) return;
+    const selectedTokens = tokens.filter(t => selectedTokenIds.has(t.id));
+    const defaultText = selectedTokens.map(t => t.text).join(' ');
+    const text = (typeof window !== 'undefined' ? window.prompt('Enter Title Card text:', defaultText) : defaultText) ?? defaultText;
+    if (text.trim()) {
+      onInsertTitle(Array.from(selectedTokenIds), text.trim());
+      setSelectedTokenIds(new Set());
+    }
   };
 
   return (
@@ -462,15 +489,52 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
           )}
 
           {selectedTokenIds.size > 0 && (
-            <ScarletButton
-              id="btn-cut-selected-tokens"
-              variant="additional-v2"
-              size="sm"
-              onClick={handleCutSelected}
-              style={{ color: '#FF4757', borderColor: '#FF4757' }}
-            >
-              Cut Selected ({selectedTokenIds.size})
-            </ScarletButton>
+            <div style={{ display: 'inline-flex', alignItems: 'center', gap: '6px' }}>
+              <input
+                ref={bRollFileInputRef}
+                id="input-transcript-broll-file"
+                data-testid="input-transcript-broll-file"
+                type="file"
+                accept="video/*"
+                style={{ display: 'none' }}
+                onChange={handleBRollFileChange}
+              />
+              {onInsertBRoll && (
+                <ScarletButton
+                  id="btn-insert-broll-selection"
+                  data-testid="btn-insert-broll-selection"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => bRollFileInputRef.current?.click()}
+                  style={{ color: '#00F0FF', borderColor: '#00F0FF' }}
+                  title="Insert B-Roll anchored to selected words"
+                >
+                  🎬 Insert B-Roll
+                </ScarletButton>
+              )}
+              {onInsertTitle && (
+                <ScarletButton
+                  id="btn-insert-title-selection"
+                  data-testid="btn-insert-title-selection"
+                  variant="secondary"
+                  size="sm"
+                  onClick={handleInsertTitle}
+                  style={{ color: '#FFD32A', borderColor: '#FFD32A' }}
+                  title="Insert Title Card anchored to selected words"
+                >
+                  🔤 Insert Title Card
+                </ScarletButton>
+              )}
+              <ScarletButton
+                id="btn-cut-selected-tokens"
+                variant="additional-v2"
+                size="sm"
+                onClick={handleCutSelected}
+                style={{ color: '#FF4757', borderColor: '#FF4757' }}
+              >
+                Cut Selected ({selectedTokenIds.size})
+              </ScarletButton>
+            </div>
           )}
 
           {deletedCount > 0 && (
@@ -484,15 +548,13 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
             </ScarletButton>
           )}
 
-          <ScarletButton
-            id="btn-purge-fillers"
-            variant="additional-v1"
-            size="sm"
-            icon={<IconLightning size={14} color="#FFA502" />}
-            onClick={onPurgeFillers}
-          >
-            Purge Fillers &amp; Pauses ({fillerCount})
-          </ScarletButton>
+          {onAutoClean && (
+            <AutoCleanButton
+              wordCount={tokens.filter(t => !t.deleted).length}
+              hasMedia={Boolean(activeMediaId)}
+              onAutoClean={onAutoClean}
+            />
+          )}
         </div>
       </div>
 
@@ -655,7 +717,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', backgroundColor: '#FFA502', borderRadius: '50%' }} />
-          Hard Filler ({fillerCount - tokens.filter(t => t.isPause).length})
+          Hard Filler ({hardFillerCount})
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', backgroundColor: '#ECCC68', borderRadius: '50%' }} />
@@ -663,7 +725,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', backgroundColor: '#70A1FF', borderRadius: '50%' }} />
-          Silence Pause &gt;0.5s ({tokens.filter(t => t.isPause).length})
+          Silence Pause &gt;0.5s ({pauseCount})
         </span>
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
           <span style={{ width: '8px', height: '8px', backgroundColor: '#8854D0', borderRadius: '50%' }} />

@@ -23,7 +23,6 @@ import {
   timelineToSourceTime,
   sourceToTimelineTime,
   rippleCutTimeRange,
-  purgeFillersAndPauses,
   restoreAllTokens,
   validateWordToken,
   validateTimelineClip,
@@ -36,6 +35,15 @@ import {
   TitleClipData,
   FilterClipData,
   getSummarizedKeyTokenIds,
+  predictDisfluentIndices,
+  BRollClip,
+  TitleClip,
+  AudioTrackConfig,
+  MultiTrackTimelineState,
+  recalculateAnchoredTimestamps,
+  insertBRollOnKeywordSelection,
+  insertTitleOnKeywordSelection,
+  executeAudioEnhancementWorkflow,
 } from '@astral/core';
 
 import {
@@ -57,7 +65,7 @@ import {
   IconSparkles,
 } from '@astral/ui-editor';
 
-import { transcribeMediaFile, checkWebGpuAvailability } from './services/whisperService';
+import { transcribeMediaFile, checkWebGpuAvailability, extract16kHzPcmFromMedia } from './services/whisperService';
 import {
   exportVideoWithFfmpegWasm,
   exportCompositionWithFfmpegWasm,
@@ -108,6 +116,19 @@ export const App: React.FC = () => {
   // BUG-25 Fix: Preview unplaced media asset from media bin
   const [previewAssetId, setPreviewAssetId] = useState<string | null>(null);
 
+  // Multi-Track Overlay Pipeline State (Decoupled & Anchored)
+  const [bRollClips, setBRollClips] = useState<Record<string, BRollClip>>({});
+  const [titleClips, setTitleClips] = useState<Record<string, TitleClip>>({});
+  const [audioConfig, setAudioConfig] = useState<AudioTrackConfig>({
+    id: 'track_audio_bgm',
+    sourceUrl: '',
+    baseVolume: 0.7,
+    duckedVolume: 0.15,
+    rampUpTime: 0.25,
+    rampDownTime: 0.4,
+    duckOnSpeech: true,
+  });
+
   // Playback & Scrubber State
   const [currentTime, setCurrentTime] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
@@ -116,6 +137,20 @@ export const App: React.FC = () => {
   const [aspectRatio, setAspectRatio] = useState<AspectRatio>('16:9');
   const [selectedClipId, setSelectedClipId] = useState<string | undefined>(undefined);
   const [selectedClipIds, setSelectedClipIds] = useState<string[]>([]);
+
+  // Active B-Roll overlay at global playhead
+  const activeBRoll = useMemo(() => {
+    return Object.values(bRollClips).find(
+      c => currentTime >= c.timelineStart && currentTime <= c.timelineEnd
+    ) ?? null;
+  }, [bRollClips, currentTime]);
+
+  // Active Title cards at global playhead
+  const activeTitles = useMemo(() => {
+    return Object.values(titleClips).filter(
+      c => currentTime >= c.timelineStart && currentTime <= c.timelineEnd
+    );
+  }, [titleClips, currentTime]);
   const [trackStates, setTrackStates] = useState<Record<string, { hidden?: boolean; locked?: boolean; muted?: boolean; volume?: number }>>({
     track_effects: { hidden: false, locked: false, muted: false, volume: 100 },
     track_stickers: { hidden: false, locked: false, muted: false, volume: 100 },
@@ -134,6 +169,7 @@ export const App: React.FC = () => {
   const [rotationAngle, setRotationAngle] = useState(0);
   const [isSubtitlesActive, setIsSubtitlesActive] = useState(true);
   const [masterVolume, setMasterVolume] = useState(100);
+  const [isProcessingEnhancement, setIsProcessingEnhancement] = useState(false);
 
   // Undo / Redo History Stacks
   const [historyStack, setHistoryStack] = useState<{ tokensByMedia: Record<string, WordToken[]>; clips: TimelineClip[] }[]>([]);
@@ -620,16 +656,6 @@ export const App: React.FC = () => {
     });
   }, [pushHistory, tokensByMedia, clips, activeTranscriptMediaId]);
 
-  // 1-Click Purge Fillers & Pauses (>0.5s)
-  const handlePurgeFillers = useCallback(() => {
-    pushHistory(tokensByMedia, clips);
-    setTokensByMedia(prev => {
-      const currentList = prev[activeTranscriptMediaId] ?? [];
-      const result = purgeFillersAndPauses(currentList);
-      return { ...prev, [activeTranscriptMediaId]: result.updatedTokens };
-    });
-  }, [pushHistory, tokensByMedia, clips, activeTranscriptMediaId]);
-
   // Restore all cut tokens
   const handleRestoreAll = useCallback(() => {
     pushHistory(tokensByMedia, clips);
@@ -658,6 +684,186 @@ export const App: React.FC = () => {
       return { ...prev, [activeTranscriptMediaId]: updated };
     });
   }, [pushHistory, tokensByMedia, clips, activeTranscriptMediaId]);
+
+  // 5-Step Audio Enhancement & Disfluency Pipeline (Silero VAD + fdt-disfluency-tiny-4m + 15ms EDL)
+  const handleAutoClean = useCallback(async () => {
+    setIsProcessingEnhancement(true);
+    try {
+      const currentList = tokensByMedia[activeTranscriptMediaId] ?? [];
+      const mediaBlob = fileBlobMapRef.current.get(activeTranscriptMediaId);
+
+      // 1. Audio Waveform Extraction (or estimate if media file not in memory)
+      let rawPcm: Float32Array;
+      if (mediaBlob) {
+        try {
+          rawPcm = await extract16kHzPcmFromMedia(mediaBlob);
+        } catch {
+          const estSec = Math.max(5, currentList[currentList.length - 1]?.end ?? 10);
+          rawPcm = new Float32Array(Math.floor(estSec * 16000));
+        }
+      } else {
+        const estSec = Math.max(5, currentList[currentList.length - 1]?.end ?? 10);
+        rawPcm = new Float32Array(Math.floor(estSec * 16000));
+      }
+
+      const silenceThresholdSec = toolSettings.equalizer.silenceThresholdSec ?? 1.0;
+      const boundaryPaddingMs = toolSettings.equalizer.boundaryPaddingMs ?? 15;
+
+      // 2-5: Execute 5-Step Pipeline (Cleansing, Silero VAD, Transcript check, fdt disfluency, 15ms EDL)
+      const pipelineResult = await executeAudioEnhancementWorkflow(rawPcm, {
+        sampleRate: 16000,
+        minSilenceDurationMs: Math.round(silenceThresholdSec * 1000),
+        boundaryPaddingMs,
+        // Step 3 check: check if the transcript is already generated then use, otherwise generate!
+        existingTranscriptTokens: currentList.length > 0 ? currentList : undefined,
+        transcribeFn: async (cleanedPcm) => {
+          if (!mediaBlob) return currentList;
+          const res = await transcribeMediaFile(mediaBlob, activeTranscriptMediaId, {
+            modelId: whisperModel,
+          });
+          return res.tokens;
+        },
+      });
+
+      const tokensToUse = pipelineResult.tokens;
+      const flaggedIndices = pipelineResult.disfluentTokenIndices;
+
+      const flaggedSpokenIds = flaggedIndices
+        .map(idx => tokensToUse[idx]?.id)
+        .filter((id): id is string => id !== undefined);
+
+      const activePauseTokens = tokensToUse.filter(t => !t.deleted && t.isPause);
+      const pauseIds = activePauseTokens.map(p => p.id);
+      const allIdsToDelete = Array.from(new Set([...flaggedSpokenIds, ...pauseIds]));
+
+      // Save updated transcript: soft-delete flagged fumbles, or set newly transcribed tokens
+      if (allIdsToDelete.length > 0 || (currentList.length === 0 && tokensToUse.length > 0)) {
+        pushHistory(tokensByMedia, clips);
+
+        const idSet = new Set(allIdsToDelete);
+        const updatedTokens = (currentList.length > 0 ? currentList : tokensToUse).map(t =>
+          idSet.has(t.id) ? { ...t, deleted: true } : t
+        );
+
+        setTokensByMedia(prev => ({
+          ...prev,
+          [activeTranscriptMediaId]: updatedTokens,
+        }));
+
+        setTelemetry(prev => ({
+          ...prev,
+          timeSavedSec: Number((prev.timeSavedSec + pipelineResult.totalTimeCutSec).toFixed(2)),
+          recoveryLog: `[Audio Cleanse] ${pipelineResult.wasTranscriptReused ? 'Reused existing transcript' : 'Generated Whisper transcript'}. Flagged ${flaggedIndices.length} fumbles (${pipelineResult.totalTimeCutSec.toFixed(2)}s cut via 15ms EDL).`,
+        }));
+
+        // Automatically recalculate anchored B-Roll and Title timestamps
+        if (Object.keys(bRollClips).length > 0 || Object.keys(titleClips).length > 0) {
+          const multiTrackState: MultiTrackTimelineState = {
+            tracks: {
+              aRollTrackId: 'track_video',
+              bRollTracks: ['track_stickers'],
+              titleTracks: ['track_title'],
+              audioTracks: ['track_audio'],
+            },
+            bRollClips,
+            titleClips,
+            audioConfigs: { [audioConfig.id]: audioConfig },
+            transcriptWords: updatedTokens,
+          };
+          const { bRolls, titles } = recalculateAnchoredTimestamps(multiTrackState);
+          setBRollClips(bRolls);
+          setTitleClips(titles);
+        }
+      }
+    } finally {
+      setIsProcessingEnhancement(false);
+    }
+  }, [tokensByMedia, activeTranscriptMediaId, whisperModel, pushHistory, clips, bRollClips, titleClips, audioConfig, toolSettings.equalizer.silenceThresholdSec, toolSettings.equalizer.boundaryPaddingMs]);
+
+  // Keyword-Anchored B-Roll Insertion from Transcript Selection
+  const handleInsertBRollFromTranscript = useCallback((selectedWordIds: string[], sourceFile: File) => {
+    const words = tokensByMedia[activeTranscriptMediaId] ?? [];
+    if (selectedWordIds.length === 0 || words.length === 0) return;
+
+    pushHistory(tokensByMedia, clips);
+
+    const multiTrackState: MultiTrackTimelineState = {
+      tracks: {
+        aRollTrackId: 'track_video',
+        bRollTracks: ['track_stickers'],
+        titleTracks: ['track_title'],
+        audioTracks: ['track_audio'],
+      },
+      bRollClips,
+      titleClips,
+      audioConfigs: { [audioConfig.id]: audioConfig },
+      transcriptWords: words,
+    };
+
+    const newBRoll = insertBRollOnKeywordSelection(selectedWordIds, sourceFile, 15.0, multiTrackState);
+    setBRollClips(prev => ({ ...prev, [newBRoll.id]: newBRoll }));
+
+    // Place on Track 1 (track_stickers / Track 2 visual overlay)
+    const newTimelineClip: TimelineClip = {
+      id: newBRoll.id,
+      trackId: 'track_stickers',
+      title: `🎬 B-Roll: ${sourceFile.name}`,
+      timelineStart: asTimelineSeconds(newBRoll.timelineStart),
+      timelineDuration: asSeconds(Math.max(0.5, newBRoll.timelineEnd - newBRoll.timelineStart)),
+      sourceIn: asSourceSeconds(0),
+      sourceOut: asSourceSeconds(Math.max(0.5, newBRoll.timelineEnd - newBRoll.timelineStart)),
+      color: '#00F0FF',
+      videoUrl: newBRoll.sourceUrl,
+    };
+    setClips(prev => [...prev, newTimelineClip]);
+  }, [tokensByMedia, activeTranscriptMediaId, bRollClips, titleClips, audioConfig, pushHistory, clips]);
+
+  // Keyword-Anchored Title Card Insertion from Transcript Selection
+  const handleInsertTitleFromTranscript = useCallback((selectedWordIds: string[], titleText: string) => {
+    const words = tokensByMedia[activeTranscriptMediaId] ?? [];
+    if (selectedWordIds.length === 0 || words.length === 0) return;
+
+    pushHistory(tokensByMedia, clips);
+
+    const multiTrackState: MultiTrackTimelineState = {
+      tracks: {
+        aRollTrackId: 'track_video',
+        bRollTracks: ['track_stickers'],
+        titleTracks: ['track_title'],
+        audioTracks: ['track_audio'],
+      },
+      bRollClips,
+      titleClips,
+      audioConfigs: { [audioConfig.id]: audioConfig },
+      transcriptWords: words,
+    };
+
+    const newTitle = insertTitleOnKeywordSelection(selectedWordIds, titleText, multiTrackState);
+    setTitleClips(prev => ({ ...prev, [newTitle.id]: newTitle }));
+
+    // Place on Track 0 (track_title)
+    const newTimelineClip: TimelineClip = {
+      id: newTitle.id,
+      trackId: 'track_title',
+      title: `🔤 ${titleText}`,
+      timelineStart: asTimelineSeconds(newTitle.timelineStart),
+      timelineDuration: asSeconds(Math.max(0.5, newTitle.timelineEnd - newTitle.timelineStart)),
+      sourceIn: asSourceSeconds(0),
+      sourceOut: asSourceSeconds(Math.max(0.5, newTitle.timelineEnd - newTitle.timelineStart)),
+      color: '#FFD32A',
+      titleData: {
+        text: titleText,
+        stylePreset: 'Minimal Modern',
+        position: { x: 50, y: 85 },
+        fontSize: newTitle.style.fontSize,
+        scale: 1.0,
+        color: newTitle.style.color,
+        backgroundColor: newTitle.style.backgroundColor,
+        alignment: 'center',
+      },
+    };
+    setClips(prev => [...prev, newTimelineClip]);
+  }, [tokensByMedia, activeTranscriptMediaId, bRollClips, titleClips, audioConfig, pushHistory, clips]);
 
   // Inline TTS Word Replacement (Softablitz A2)
   const handleEditTokenText = useCallback((tokenId: string, newText: string) => {
@@ -1831,6 +2037,20 @@ export const App: React.FC = () => {
           rotationAngle,
           activeTransition: currentTransition,
           activeTransitionDuration: activeClip?.transitionDuration || 1.2,
+          activeTitle: activeTitleClip?.title,
+          activeTitleData,
+          activeSticker: activeStickerClip ? activeStickerClip.title.replace(/^★\s*/, '') : undefined,
+          bRollClips: Object.values(bRollClips),
+          titleClips: Object.values(titleClips),
+          audioConfig: backgroundAudioClip ? {
+            id: 'bgm',
+            sourceUrl: backgroundAudioClip.videoUrl || '',
+            baseVolume: (trackStates['track_audio']?.volume ?? 100) / 100,
+            duckedVolume: 0.15,
+            rampUpTime: 0.25,
+            rampDownTime: 0.4,
+            duckOnSpeech: true,
+          } : undefined,
           onProgress: p => {
             callbacks.onProgress(p.percent, p.stage, p.log);
             if (p.memfsAllocatedMb !== undefined) {
@@ -2079,15 +2299,19 @@ export const App: React.FC = () => {
 
           if (skipRanges.length > 0) {
             const sourcePos = timelineToSourceTime(targetTimeline, currentClip);
+            // Anticipatory lookahead margin (30ms / ~1-2 animation frames) prevents audio bleeding
+            // into deleted tokens before the next render frame can leap
+            const LOOKAHEAD_SEC = 0.030;
             for (const range of skipRanges) {
-              if (sourcePos >= range.start && sourcePos < range.end) {
+              if (sourcePos >= range.start - LOOKAHEAD_SEC && sourcePos < range.end) {
+                // Leap targetTimeline directly to range.end in source time
                 const leapSec = range.end - sourcePos;
-                rawNext = rawNext + leapSec;
+                rawNext = rawNext + Math.max(0, leapSec);
                 setIsAcrossCutBoundary(true);
-                setTimeout(() => setIsAcrossCutBoundary(false), 50);
+                setTimeout(() => setIsAcrossCutBoundary(false), 80);
                 setTelemetry(prev => ({
                   ...prev,
-                  recoveryLog: `[SKIP PLAYBACK] Smooth leap across deleted word range [${range.start.toFixed(2)}s - ${range.end.toFixed(2)}s] to ${rawNext.toFixed(2)}s.`,
+                  recoveryLog: `[SKIP PLAYBACK] Immediate leap across deleted word range [${range.start.toFixed(2)}s - ${range.end.toFixed(2)}s] to ${rawNext.toFixed(2)}s.`,
                 }));
                 break;
               }
@@ -2220,7 +2444,6 @@ export const App: React.FC = () => {
               onSelectMediaId={setActiveTranscriptMediaId}
               onToggleDeleteToken={handleToggleDeleteToken}
               onToggleDeleteMultipleTokens={handleToggleDeleteMultipleTokens}
-              onPurgeFillers={handlePurgeFillers}
               onRestoreAllTokens={handleRestoreAll}
               onEditTokenText={handleEditTokenText}
               onSeekToTime={handleTranscriptSeek}
@@ -2233,6 +2456,9 @@ export const App: React.FC = () => {
               transcriptionError={transcriptionError}
               onClearTranscriptionError={() => setTranscriptionError(null)}
               onSummarizeKeyPoints={handleSummarizeKeyPoints}
+              onAutoClean={handleAutoClean}
+              onInsertBRoll={handleInsertBRollFromTranscript}
+              onInsertTitle={handleInsertTitleFromTranscript}
             />
           ) : activeDockTab === 'media' && activeSubNav === 'import' ? (
             /* View C: Import Dropzone with Real Files */
@@ -2249,6 +2475,8 @@ export const App: React.FC = () => {
               onTabChange={setActiveToolTab}
               masterVolume={masterVolume}
               onMasterVolumeChange={setMasterVolume}
+              onRunAudioEnhancement={handleAutoClean}
+              isProcessingEnhancement={isProcessingEnhancement}
             />
           ) : ['filters', 'transitions', 'titles', 'stickers'].includes(activeDockTab) ? (
             /* View E: Effects Grid (Page 4 & 7) */
@@ -2431,6 +2659,9 @@ export const App: React.FC = () => {
               setActiveSubNav('my-files');
             }}
             onBrowseFilesSelected={handleFilesAdded}
+            activeBRoll={activeBRoll}
+            activeTitles={activeTitles}
+            audioConfig={audioConfig}
           />
           </div>
         </div>

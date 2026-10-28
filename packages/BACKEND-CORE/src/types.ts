@@ -249,6 +249,9 @@ export interface ToolSettings {
     preset: string;
     bands: number[]; // 10 bands from 31Hz to 16kHz
     vocalPurifierEnabled: boolean; // 85Hz HPF + noise gate
+    audioEnhancementEnabled?: boolean; // DeepFilterNet3 + Silero VAD + fdt-disfluency-tiny-4m
+    silenceThresholdSec?: number; // silence threshold (default 1.0s)
+    boundaryPaddingMs?: number; // boundary padding (default 15ms)
   };
   overlay: {
     mode: 'none' | 'pip' | 'logo' | 'triplet' | 'side-left' | 'side-right' | 'top-bottom';

@@ -9,6 +9,8 @@ export interface ToolsDrawerViewProps {
   onTabChange?: (tab: ToolDrawerTab) => void;
   masterVolume?: number;
   onMasterVolumeChange?: (volume: number) => void;
+  onRunAudioEnhancement?: () => Promise<void>;
+  isProcessingEnhancement?: boolean;
 }
 
 export const ToolsDrawerView: React.FC<ToolsDrawerViewProps> = ({
@@ -18,6 +20,8 @@ export const ToolsDrawerView: React.FC<ToolsDrawerViewProps> = ({
   onTabChange,
   masterVolume = 100,
   onMasterVolumeChange,
+  onRunAudioEnhancement,
+  isProcessingEnhancement = false,
 }) => {
   const [internalTab, setInternalTab] = useState<ToolDrawerTab>('chroma');
   const activeTab = activeSubTab ?? internalTab;
@@ -452,6 +456,153 @@ export const ToolsDrawerView: React.FC<ToolsDrawerViewProps> = ({
             >
               {settings.equalizer.vocalPurifierEnabled ? 'ENABLED' : 'DISABLED'}
             </button>
+          </div>
+
+          {/* Audio Enhancement Option (DeepFilterNet3 + Silero VAD + fdt-disfluency-tiny-4m) */}
+          <div
+            id="panel-audio-enhancement-option"
+            data-testid="panel-audio-enhancement-option"
+            style={{
+              backgroundColor: settings.equalizer.audioEnhancementEnabled ? 'rgba(22, 139, 255, 0.08)' : '#22262E',
+              border: settings.equalizer.audioEnhancementEnabled ? '1px solid #168BFF' : '1px solid #2B303A',
+              borderRadius: '8px',
+              padding: '12px 14px',
+              display: 'flex',
+              flexDirection: 'column',
+              gap: '10px',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <div>
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                  <span style={{ fontSize: '13px', fontWeight: 600, color: '#FFFFFF' }}>
+                    Audio Enhancement &amp; Disfluency Engine
+                  </span>
+                  <span
+                    style={{
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      backgroundColor: '#1E293B',
+                      color: '#38BDF8',
+                      border: '1px solid #0284C7',
+                      borderRadius: '4px',
+                      padding: '1px 6px',
+                    }}
+                  >
+                    DeepFilterNet3 + Silero VAD + fdt-disfluency-tiny-4m
+                  </span>
+                </div>
+                <div style={{ fontSize: '10px', color: '#94A3B8', marginTop: '2px' }}>
+                  5-step neural workflow: Cleanses noise, segments silences, verifies/generates transcript, classifies BIO tokens, and unions 15ms padded EDL.
+                </div>
+              </div>
+              <button
+                type="button"
+                id="btn-toggle-audio-enhancement"
+                data-testid="btn-toggle-audio-enhancement"
+                onClick={() =>
+                  onUpdateSettings(prev => ({
+                    ...prev,
+                    equalizer: {
+                      ...prev.equalizer,
+                      audioEnhancementEnabled: !prev.equalizer.audioEnhancementEnabled,
+                    },
+                  }))
+                }
+                style={{
+                  backgroundColor: settings.equalizer.audioEnhancementEnabled ? '#168BFF' : '#3B4250',
+                  color: '#FFFFFF',
+                  border: 'none',
+                  borderRadius: '9999px',
+                  padding: '4px 12px',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                {settings.equalizer.audioEnhancementEnabled ? 'ACTIVE' : 'OFF'}
+              </button>
+            </div>
+
+            {settings.equalizer.audioEnhancementEnabled && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', borderTop: '1px solid #2B303A', paddingTop: '10px' }}>
+                <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94A3B8', marginBottom: '2px' }}>
+                      <span>Silero VAD Cut Threshold</span>
+                      <span style={{ color: '#38BDF8', fontWeight: 600 }}>{(settings.equalizer.silenceThresholdSec ?? 1.0).toFixed(1)}s</span>
+                    </div>
+                    <input
+                      id="slider-silero-vad-threshold"
+                      data-testid="slider-silero-vad-threshold"
+                      type="range"
+                      min="0.5"
+                      max="3.0"
+                      step="0.1"
+                      value={settings.equalizer.silenceThresholdSec ?? 1.0}
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        onUpdateSettings(prev => ({
+                          ...prev,
+                          equalizer: { ...prev.equalizer, silenceThresholdSec: val },
+                        }));
+                      }}
+                      style={{ width: '100%', accentColor: '#168BFF', cursor: 'pointer' }}
+                    />
+                  </div>
+                  <div>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '10px', color: '#94A3B8', marginBottom: '2px' }}>
+                      <span>Boundary Padding Guard</span>
+                      <span style={{ color: '#2ED573', fontWeight: 600 }}>{settings.equalizer.boundaryPaddingMs ?? 15}ms</span>
+                    </div>
+                    <input
+                      id="slider-boundary-padding-guard"
+                      data-testid="slider-boundary-padding-guard"
+                      type="range"
+                      min="10"
+                      max="30"
+                      step="1"
+                      value={settings.equalizer.boundaryPaddingMs ?? 15}
+                      onChange={e => {
+                        const val = Number(e.target.value);
+                        onUpdateSettings(prev => ({
+                          ...prev,
+                          equalizer: { ...prev.equalizer, boundaryPaddingMs: val },
+                        }));
+                      }}
+                      style={{ width: '100%', accentColor: '#2ED573', cursor: 'pointer' }}
+                    />
+                  </div>
+                </div>
+
+                {onRunAudioEnhancement && (
+                  <button
+                    type="button"
+                    id="btn-run-audio-enhancement-workflow"
+                    data-testid="btn-run-audio-enhancement-workflow"
+                    onClick={onRunAudioEnhancement}
+                    disabled={isProcessingEnhancement}
+                    style={{
+                      marginTop: '4px',
+                      backgroundColor: '#168BFF',
+                      color: '#FFFFFF',
+                      border: 'none',
+                      borderRadius: '6px',
+                      padding: '6px 12px',
+                      fontSize: '11px',
+                      fontWeight: 600,
+                      cursor: isProcessingEnhancement ? 'wait' : 'pointer',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      gap: '6px',
+                    }}
+                  >
+                    <span>{isProcessingEnhancement ? 'Enhancing Waveform & Pruning Disfluencies...' : '⚡ Run Audio Enhancement & Silence Prune'}</span>
+                  </button>
+                )}
+              </div>
+            )}
           </div>
 
           {/* 10 Vertical Faders */}
