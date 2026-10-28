@@ -149,6 +149,22 @@ export function buildExportVideoFilters(
       filters.push(`colorbalance=rs=0.15:gs=0.05:bs=-0.1,eq=contrast=1.08:saturation=1.2`);
     } else if (filterName === 'Motion Blur Soft') {
       filters.push('boxblur=2:1');
+    } else if (filterName === 'Vibrant Pop') {
+      filters.push(`eq=saturation=${(1 + 0.6 * intensity).toFixed(2)}:contrast=${(1 + 0.15 * intensity).toFixed(2)}`);
+    } else if (filterName === 'Emerald Forest') {
+      filters.push(`colorbalance=gs=${(0.18 * intensity).toFixed(2)}:bs=${(-0.1 * intensity).toFixed(2)},eq=contrast=1.1:saturation=1.2`);
+    } else if (filterName === 'Sepia Vintage') {
+      filters.push('colorchannelmixer=.393:.769:.189:0:.349:.686:.168:0:.272:.534:.131,eq=contrast=1.1');
+    } else if (filterName === 'Pastel Dream') {
+      filters.push('eq=brightness=0.08:saturation=0.75:contrast=0.92');
+    } else if (filterName === 'Matrix Terminal') {
+      filters.push('colorchannelmixer=0:0:0:0:0:1.3:0:0:0:0:0:0,eq=contrast=1.3');
+    } else if (filterName === 'Arctic Frost') {
+      filters.push('colorbalance=bs=0.25:rs=-0.1:gs=0.05,eq=brightness=0.05:saturation=1.2');
+    } else if (filterName === 'Sunset Vignette') {
+      filters.push('colorbalance=rs=0.18:bs=-0.15,eq=contrast=1.15:saturation=1.1');
+    } else if (filterName === 'Radial Focus') {
+      filters.push('boxblur=3:1');
     } else {
       filters.push(`eq=contrast=${(1 + 0.2 * intensity).toFixed(2)}:saturation=${(1 + 0.2 * intensity).toFixed(2)}`);
     }

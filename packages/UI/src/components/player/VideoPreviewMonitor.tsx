@@ -776,6 +776,14 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
       else if (activeFilter === 'Noir Fade') parts.push(`grayscale(${0.85 * factor}) contrast(${1 + 0.2 * factor}) brightness(${1 - 0.1 * factor})`);
       else if (activeFilter === 'Polaroid Warm') parts.push(`sepia(${0.45 * factor}) saturate(${1 + 0.3 * factor}) contrast(${1 + 0.05 * factor})`);
       else if (activeFilter === 'Motion Blur Soft') parts.push(`blur(${0.6 * factor}px) brightness(${1 + 0.05 * factor})`);
+      else if (activeFilter === 'Vibrant Pop') parts.push(`saturate(${1 + 1.2 * factor}) contrast(${1 + 0.2 * factor})`);
+      else if (activeFilter === 'Emerald Forest') parts.push(`hue-rotate(${70 * factor}deg) saturate(${1 + 0.5 * factor}) contrast(${1 + 0.1 * factor})`);
+      else if (activeFilter === 'Sepia Vintage') parts.push(`sepia(${0.85 * factor}) contrast(${1 + 0.1 * factor})`);
+      else if (activeFilter === 'Pastel Dream') parts.push(`brightness(${1 + 0.15 * factor}) saturate(${Math.max(0.2, 1 - 0.25 * factor)}) contrast(${Math.max(0.5, 1 - 0.1 * factor)})`);
+      else if (activeFilter === 'Matrix Terminal') parts.push(`hue-rotate(${95 * factor}deg) saturate(${1 + 2 * factor}) contrast(${1 + 0.4 * factor})`);
+      else if (activeFilter === 'Arctic Frost') parts.push(`hue-rotate(${190 * factor}deg) brightness(${1 + 0.1 * factor}) saturate(${1 + 0.3 * factor})`);
+      else if (activeFilter === 'Sunset Vignette') parts.push(`sepia(${0.35 * factor}) contrast(${1 + 0.25 * factor}) brightness(${1 - 0.08 * factor})`);
+      else if (activeFilter === 'Radial Focus') parts.push(`blur(${0.8 * factor}px) contrast(${1 + 0.15 * factor})`);
       else parts.push(`contrast(${1 + 0.15 * factor}) saturate(${1 + 0.2 * factor})`);
     }
     // Chroma key approximation: boost key channel + slight blur on edges when enabled
@@ -1767,6 +1775,40 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
                 <div style={{ backgroundColor: 'rgba(20, 24, 33, 0.9)', border: '1px solid #00D2D3', borderRadius: '6px', padding: '6px 18px', color: '#00D2D3', fontFamily: "'JetBrains Mono', monospace", fontWeight: 700, letterSpacing: '1.5px' }}>
                   {titleText}
                 </div>
+              ) : titlePreset.toLowerCase().includes('neon') ? (
+                <div style={{ border: '2px solid #FF007F', borderRadius: '8px', padding: '10px 24px', color: '#FFF', fontFamily: "'Inter', sans-serif", fontWeight: 900, textTransform: 'uppercase', letterSpacing: '2px', boxShadow: '0 0 25px #FF007F, inset 0 0 15px #FF007F', textShadow: '0 0 10px #FF007F, 0 0 20px #FF007F' }}>
+                  {titleText}
+                </div>
+              ) : titlePreset.toLowerCase().includes('glitch') ? (
+                <div style={{ backgroundColor: '#0A0C10', border: '2px solid #00F0FF', borderRadius: '4px', padding: '8px 22px', color: '#00F0FF', fontFamily: "'JetBrains Mono', monospace", fontWeight: 800, textShadow: '2px 0 #FF4757, -2px 0 #168BFF', boxShadow: '0 0 20px rgba(0, 240, 255, 0.5)' }}>
+                  {titleText}
+                </div>
+              ) : titlePreset.toLowerCase().includes('breaking') || titlePreset.toLowerCase().includes('alert') ? (
+                <div style={{ display: 'flex', alignItems: 'center', backgroundColor: '#C0392B', color: '#FFF', borderRadius: '4px', overflow: 'hidden', fontWeight: 900, boxShadow: '0 8px 30px rgba(192, 57, 43, 0.7)' }}>
+                  <span style={{ backgroundColor: '#FFF', color: '#C0392B', padding: '8px 12px', fontSize: '11px', letterSpacing: '1px' }}>ALERT</span>
+                  <span style={{ padding: '8px 18px' }}>{titleText}</span>
+                </div>
+              ) : titlePreset.toLowerCase().includes('gaming') || titlePreset.toLowerCase().includes('stream') ? (
+                <div style={{ backgroundColor: '#131920', borderLeft: '4px solid #27AE60', borderRight: '4px solid #27AE60', borderRadius: '8px', padding: '10px 24px', color: '#FFF', fontWeight: 800, boxShadow: '0 6px 25px rgba(39, 174, 96, 0.5)' }}>
+                  🎮 {titleText}
+                </div>
+              ) : titlePreset.toLowerCase().includes('luxury') || titlePreset.toLowerCase().includes('award') ? (
+                <div style={{ backgroundColor: 'rgba(10, 10, 10, 0.95)', border: '2px solid #F39C12', borderRadius: '8px', padding: '12px 32px', color: '#F39C12', fontFamily: "'Times New Roman', serif", fontWeight: 700, letterSpacing: '4px', boxShadow: '0 0 30px rgba(243, 156, 18, 0.5)' }}>
+                  🏆 {titleText.toUpperCase()}
+                </div>
+              ) : titlePreset.toLowerCase().includes('podcast') ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '8px', backgroundColor: '#9B59B6', color: '#FFF', borderRadius: '9999px', padding: '8px 20px', fontWeight: 800, boxShadow: '0 6px 20px rgba(155, 89, 182, 0.6)' }}>
+                  <span>🎙️</span>
+                  <span>{titleText}</span>
+                </div>
+              ) : titlePreset.toLowerCase().includes('quote') ? (
+                <div style={{ backgroundColor: 'rgba(255,255,255,0.08)', borderLeft: '4px solid #FFF', backdropFilter: 'blur(10px)', padding: '10px 20px', color: '#FFF', fontStyle: 'italic', fontWeight: 500 }}>
+                  "{titleText}"
+                </div>
+              ) : titlePreset.toLowerCase().includes('synth') || titlePreset.toLowerCase().includes('80s') ? (
+                <div style={{ background: 'linear-gradient(135deg, #E056FD, #FF7675)', borderRadius: '8px', padding: '10px 26px', color: '#FFF', fontWeight: 900, letterSpacing: '2px', textTransform: 'uppercase', boxShadow: '0 8px 30px rgba(224, 86, 253, 0.7)' }}>
+                  {titleText}
+                </div>
               ) : (
                 <div style={{ backgroundColor: 'rgba(22, 27, 36, 0.88)', backdropFilter: 'blur(16px)', border: '1px solid #8854D0', borderRadius: '8px', padding: '8px 24px', color: '#FFFFFF', fontWeight: 600, letterSpacing: '0.5px', boxShadow: '0 8px 24px rgba(136, 84, 208, 0.45)' }}>
                   {titleText}
@@ -1869,6 +1911,51 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
                 <div style={{ backgroundColor: '#2ED573', borderRadius: '50%', width: '56px', height: '56px', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 8px 25px rgba(46, 213, 115, 0.7)', border: '2px solid #FFF' }}>
                   <span style={{ fontSize: '30px', color: '#FFF', fontWeight: 900 }}>✓</span>
                 </div>
+              ) : activeSticker.toLowerCase().includes('100') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', filter: 'drop-shadow(0 0 16px #FF3838)' }}>
+                  <span style={{ fontSize: '56px' }}>💯</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('star') ? (
+                <div style={{ backgroundColor: '#1A1D24', border: '2px solid #F1C40F', borderRadius: '9999px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '4px', boxShadow: '0 6px 20px rgba(241, 196, 15, 0.6)' }}>
+                  <span style={{ fontSize: '20px' }}>⭐⭐⭐⭐⭐</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('warning') || activeSticker.toLowerCase().includes('hazard') ? (
+                <div style={{ backgroundColor: '#F39C12', color: '#000', borderRadius: '8px', padding: '8px 16px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 900, fontSize: '13px', boxShadow: '0 8px 25px rgba(243, 156, 18, 0.7)' }}>
+                  <span style={{ fontSize: '22px' }}>⚠️</span>
+                  <span>CAUTION</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('party') || activeSticker.toLowerCase().includes('popper') ? (
+                <div style={{ display: 'flex', alignItems: 'center', gap: '6px', filter: 'drop-shadow(0 0 20px #9B59B6)' }}>
+                  <span style={{ fontSize: '54px' }}>🎉</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('target') || activeSticker.toLowerCase().includes('reticle') ? (
+                <div style={{ width: '64px', height: '64px', borderRadius: '50%', border: '3px solid #00F0FF', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 20px #00F0FF' }}>
+                  <span style={{ fontSize: '24px', color: '#00F0FF' }}>🎯</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('thumbs down') || activeSticker.toLowerCase().includes('dislike') ? (
+                <div style={{ backgroundColor: '#576574', borderRadius: '16px', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: '8px', color: '#FFF', fontWeight: 800, fontSize: '14px', border: '2px solid #FFF' }}>
+                  <span style={{ fontSize: '28px' }}>👎</span>
+                  <span>NOPE</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('sale') ? (
+                <div style={{ backgroundColor: '#EE5253', color: '#FFF', borderRadius: '6px', padding: '6px 14px', fontWeight: 900, fontSize: '14px', letterSpacing: '1px', boxShadow: '0 6px 20px rgba(238, 82, 83, 0.8)', border: '2px dashed #FFF' }}>
+                  🏷️ SALE 50% OFF
+                </div>
+              ) : activeSticker.toLowerCase().includes('rocket') ? (
+                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', filter: 'drop-shadow(0 0 20px #FF9F43)' }}>
+                  <span style={{ fontSize: '56px' }}>🚀</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('crown') ? (
+                <div style={{ backgroundColor: '#E67E22', color: '#FFF', borderRadius: '9999px', padding: '8px 18px', display: 'flex', alignItems: 'center', gap: '8px', fontWeight: 900, fontSize: '14px', boxShadow: '0 8px 24px rgba(230, 126, 34, 0.8)' }}>
+                  <span style={{ fontSize: '24px' }}>👑</span>
+                  <span>VIP PASS</span>
+                </div>
+              ) : activeSticker.toLowerCase().includes('bubble') || activeSticker.toLowerCase().includes('speech') ? (
+                <div style={{ backgroundColor: '#54A0FF', color: '#FFF', borderRadius: '16px 16px 16px 0', padding: '10px 16px', fontWeight: 800, fontSize: '13px', boxShadow: '0 8px 24px rgba(84, 160, 255, 0.6)' }}>
+                  💬 WOW!
+                </div>
+              ) : activeSticker.toLowerCase().includes('circle') ? (
+                <div style={{ width: '70px', height: '70px', borderRadius: '50%', border: '4px solid #70A1FF', boxShadow: '0 0 18px #70A1FF' }} />
               ) : (
                 <div style={{ backgroundColor: 'rgba(255, 71, 87, 0.95)', borderRadius: '12px', padding: '10px 16px', color: '#FFF', fontWeight: 800, fontSize: '14px', boxShadow: '0 8px 24px rgba(255, 71, 87, 0.6)' }}>
                   ★ {activeSticker}
