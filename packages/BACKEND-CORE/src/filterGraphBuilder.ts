@@ -51,6 +51,23 @@ export function formatAssTimestamp(seconds: number): string {
 }
 
 /**
+ * Sanitizes and escapes text for safe inclusion in Advanced SubStation Alpha (ASS) dialogue events.
+ * Neutralizes raw override braces '{' and '}' to prevent ASS tag injection (e.g. {\an8}, {\b1}),
+ * removes unescaped backslashes, and normalizes line breaks.
+ */
+export function escapeAssText(text: string): string {
+  if (!text) return '';
+  return text
+    .replace(/\\[Nn]/g, ' ')
+    .replace(/\\/g, '')
+    .replace(/\{/g, '（')
+    .replace(/\}/g, '）')
+    .replace(/\r?\n/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+/**
  * Generates standard Advanced SubStation Alpha (ASS v4.00+) subtitle script
  * from active (non-deleted) WordTokens.
  *
@@ -107,7 +124,8 @@ export function generateAssSubtitleScript(
       const y = Math.round(((ov.posY ?? (ov.style === 'sticker' ? 22 : 82)) / 100) * playResY);
       const fs = ov.fontSize ? `\\fs${ov.fontSize}` : '';
       const posTag = `{\\pos(${x},${y})${fs}\\b1}`;
-      lines.push(`Dialogue: 1,${sTime},${eTime},${styleName},,0,0,0,,${posTag}${ov.text}`);
+      const safeText = escapeAssText(ov.text);
+      lines.push(`Dialogue: 1,${sTime},${eTime},${styleName},,0,0,0,,${posTag}${safeText}`);
     }
   }
 
@@ -155,7 +173,8 @@ export function generateAssSubtitleScript(
 
     const startTime = formatAssTimestamp(mappedStartSec);
     const endTime = formatAssTimestamp(Math.max(rawMappedEndSec, mappedStartSec + 0.3));
-    const sentenceText = chunk.map(t => t.replacementText ?? t.text).join(' ');
+    const rawSentenceText = chunk.map(t => t.replacementText ?? t.text).join(' ');
+    const sentenceText = escapeAssText(rawSentenceText);
 
     lines.push(`Dialogue: 0,${startTime},${endTime},ScarletDefault,,0,0,0,,${sentenceText}`);
   }

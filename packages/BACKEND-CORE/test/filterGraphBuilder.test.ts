@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   formatAssTimestamp,
+  escapeAssText,
   generateAssSubtitleScript,
   generateConcatDemuxerList,
   generateFfmpegFilterComplex,
@@ -208,4 +209,24 @@ test('9. generateAssSubtitleScript renders title and sticker overlays into ASS s
   assert.ok(ass.includes('Dialogue: 1,0:00:00.00,0:00:05.00,ScarletTitle,,0,0,0,,{\\pos(960,864)\\b1}Epic Title'));
   assert.ok(ass.includes('Dialogue: 1,0:00:01.00,0:00:06.00,ScarletSticker,,0,0,0,,{\\pos(960,216)\\b1}★ TRENDING'));
 });
+
+test('10. escapeAssText neutralizes curly braces, backslashes and prevents ASS style override injections', () => {
+  const maliciousInput = '{\\an8\\fs100}Hacked Title with \\N newline';
+  const sanitized = escapeAssText(maliciousInput);
+
+  assert.equal(sanitized, '（an8fs100）Hacked Title with newline');
+  assert.ok(!sanitized.includes('{'));
+  assert.ok(!sanitized.includes('}'));
+  assert.ok(!sanitized.includes('\\'));
+
+  // Test inside generateAssSubtitleScript
+  const ass = generateAssSubtitleScript([], {
+    overlays: [
+      { text: '{\\b1}Exploit{\\b0}', startTime: 0, endTime: 3.0, style: 'title' },
+    ],
+  });
+  assert.ok(!ass.includes('{\\b1}'));
+  assert.ok(ass.includes('（b1）Exploit（b0）'));
+});
+
 
