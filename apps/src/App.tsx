@@ -2669,6 +2669,23 @@ export const App: React.FC = () => {
               <span style={{ fontSize: '10px', color: '#636E7B', fontFamily: "'JetBrains Mono', monospace" }}>
                 ({aspectRatio})
               </span>
+              <span
+                id="badge-video-trimmed-length"
+                data-testid="badge-video-trimmed-length"
+                style={{
+                  fontSize: '10px',
+                  fontFamily: "'JetBrains Mono', monospace",
+                  fontWeight: 600,
+                  backgroundColor: 'rgba(46, 213, 115, 0.15)',
+                  color: '#2ED573',
+                  border: '1px solid rgba(46, 213, 115, 0.4)',
+                  padding: '2px 7px',
+                  borderRadius: '9999px',
+                }}
+                title="Total video duration after trimming & ripple cuts"
+              >
+                ⏱ {Math.floor(projectDuration / 60)}:{String(Math.floor(projectDuration % 60)).padStart(2, '0')}
+              </span>
             </div>
             <button
               id="btn-export-top-right"

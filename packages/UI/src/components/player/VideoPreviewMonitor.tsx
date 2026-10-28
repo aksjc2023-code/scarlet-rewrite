@@ -575,6 +575,7 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
   }, [subtitleChunks, effectiveSourceTime]);
 
   const timecode = formatTimecode(currentTime);
+  const durationTimecode = formatTimecode(duration);
 
   const isVideoTrackHidden = !!trackStates?.['track_video']?.hidden;
   const isTitleTrackHidden = !!trackStates?.['track_title']?.hidden;
@@ -2078,13 +2079,29 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
           paddingTop: '4px',
         }}
       >
-        {/* Left: Timecode Readout */}
-        <div style={{ display: 'flex', alignItems: 'baseline', fontFamily: "'JetBrains Mono', monospace" }}>
-          <span style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}>
+        {/* Left: Timecode Readout with Total Trimmed Video Length */}
+        <div style={{ display: 'flex', alignItems: 'baseline', fontFamily: "'JetBrains Mono', monospace", gap: '2px' }}>
+          <span
+            id="player-timecode-current"
+            data-testid="player-timecode-current"
+            style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}
+          >
             {timecode.main}
           </span>
-          <span style={{ fontSize: '11px', color: '#636E7B', marginLeft: '4px' }}>
+          <span style={{ fontSize: '11px', color: '#636E7B', marginRight: '6px' }}>
             {timecode.ms}
+          </span>
+          <span style={{ fontSize: '13px', color: '#8A96A6', margin: '0 2px' }}>/</span>
+          <span
+            id="player-timecode-duration"
+            data-testid="player-timecode-duration"
+            style={{ fontSize: '14px', fontWeight: 500, color: '#2ED573', marginLeft: '4px' }}
+            title="Total video length after cuts & trimming"
+          >
+            {durationTimecode.main}
+          </span>
+          <span style={{ fontSize: '11px', color: '#636E7B', marginLeft: '2px' }}>
+            {durationTimecode.ms}
           </span>
         </div>
 
