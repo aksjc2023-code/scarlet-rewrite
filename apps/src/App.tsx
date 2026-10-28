@@ -2528,7 +2528,7 @@ export const App: React.FC = () => {
         )}
 
         {/* Zone 3: Center Workspace Viewport */}
-        <div style={{ flex: 1, backgroundColor: '#181B20', overflow: 'hidden', position: 'relative' }}>
+        <div style={{ flex: 1, backgroundColor: '#181B20', overflow: 'hidden', position: 'relative', display: 'flex', flexDirection: 'column', minHeight: 0 }}>
           {activeDockTab === 'media' && activeSubNav === 'transcript' ? (
             /* View B: Transcript Storyboard */
             <TranscriptEditorView

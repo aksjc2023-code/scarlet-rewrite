@@ -318,16 +318,24 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   return (
     <div
       ref={containerRef}
+      id="transcript-editor-view-container"
+      data-testid="transcript-editor-view-container"
       tabIndex={0}
       onClick={() => setSelectedTokenIds(new Set())}
       style={{
         display: 'flex',
         flexDirection: 'column',
         height: '100%',
+        maxHeight: '100%',
+        flex: 1,
+        minHeight: 0,
         backgroundColor: '#181B20',
         padding: '16px 20px',
         overflowY: 'auto',
+        overflowX: 'hidden',
         outline: 'none',
+        position: 'relative',
+        boxSizing: 'border-box',
       }}
     >
       {/* Top Action Bar */}
@@ -341,6 +349,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
           borderBottom: '1px solid #2B303A',
           flexWrap: 'wrap',
           gap: '10px',
+          flexShrink: 0,
         }}
       >
         <div>
@@ -702,6 +711,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
           alignItems: 'center',
           gap: '8px',
           marginBottom: '12px',
+          flexShrink: 0,
         }}
       >
         <input
@@ -790,6 +800,7 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
           fontSize: '11px',
           color: '#8A96A6',
           flexWrap: 'wrap',
+          flexShrink: 0,
         }}
       >
         <span style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
@@ -852,17 +863,19 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
       {/* Interactive Word Token Flow */}
       {tokens.length > 0 && (
       <div
+        id="transcript-word-tokens-container"
+        data-testid="transcript-word-tokens-container"
         style={{
           backgroundColor: '#14171C',
           borderRadius: '14px',
           padding: '22px',
+          marginBottom: '24px',
           border: '1px solid #2B303A',
           lineHeight: '2.5',
           fontSize: '15px',
           userSelect: 'none',
           minHeight: '200px',
-          contentVisibility: 'auto' as any,
-          containIntrinsicSize: '0 400px',
+          flex: '1 0 auto',
         }}
       >
         <style>{`
