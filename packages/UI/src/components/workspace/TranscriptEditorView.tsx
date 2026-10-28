@@ -195,6 +195,25 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
     }
   };
 
+  const [floatingToolbarPos, setFloatingToolbarPos] = useState<{ x: number; y: number } | null>(null);
+
+  useEffect(() => {
+    if (selectedTokenIds.size === 0) {
+      setFloatingToolbarPos(null);
+      return;
+    }
+    const firstSelectedId = Array.from(selectedTokenIds)[0];
+    const el = document.getElementById(`word-token-${firstSelectedId}`);
+    if (el) {
+      const rect = el.getBoundingClientRect();
+      const parentRect = containerRef.current?.getBoundingClientRect() || { left: 0, top: 0 };
+      setFloatingToolbarPos({
+        x: Math.max(10, rect.left - parentRect.left),
+        y: Math.max(10, rect.top - parentRect.top - 46),
+      });
+    }
+  }, [selectedTokenIds]);
+
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (isMouseSelecting) {

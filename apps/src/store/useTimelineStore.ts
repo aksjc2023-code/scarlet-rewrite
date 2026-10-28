@@ -227,6 +227,7 @@ export const useTimelineStore = create<TimelineStoreState>((set, get) => {
 
       const newClip = insertTitleOnKeywordSelection(selectedWordIds, titleText, multiTrackState, {
         style: {
+          fontFamily: 'Inter, sans-serif',
           position: (stylePreset as any) || 'lower_third',
           fontSize: 48,
           color: '#FFFFFF',

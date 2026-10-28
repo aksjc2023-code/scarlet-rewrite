@@ -258,6 +258,7 @@ export async function exportVideoWithFfmpegWasm(
     memfsAllocatedMb: inputSizeMb,
   });
 
+  let workerFsMounted = false;
   try {
     const ffmpeg = await getLoadedFFmpeg(onProgress, onLog);
 
@@ -275,7 +276,6 @@ export async function exportVideoWithFfmpegWasm(
     ffmpeg.on('progress', progressHandler);
 
     try {
-      let workerFsMounted = false;
       let effectiveInputPath = inputFileName;
 
       try {
