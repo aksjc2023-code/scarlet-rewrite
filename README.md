@@ -183,31 +183,13 @@ scarlet-rewrite/
 ScarletCut executes complete automatic speech recognition (ASR) locally within the user's browser, bypassing all cloud speech APIs.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor User as User Video Ingestion
-    participant WebAudio as Web Audio API (Resampler)
-    participant Worker as Background Web Worker
-    participant WebGPU as WebGPU Device (INT8 Whisper)
-    participant WASM as WASM SIMD (Fallback)
-    participant Normalizer as Monotonic Alignment Engine
-    participant UI as Transcript Editor UI
-
-    User->>WebAudio: Ingest Media Container (MP4 / WebM / MOV up to 750MB)
-    WebAudio->>Worker: Pipe raw AudioBuffer slice
-    Worker->>Worker: Resample to 16,000 Hz Mono Float32Array PCM
-    Worker-->>WebAudio: Clean temporary AudioContext (finally { audioCtx.close() })
-    Worker->>WebGPU: Allocate Tensor buffer in local GPU VRAM
-    alt WebGPU Available
-        WebGPU->>WebGPU: Run INT8 quantized Whisper-tiny forward pass
-        WebGPU-->>Normalizer: Raw sub-word tokens with start & end timestamps
-    else WebGPU Context Lost or Unsupported
-        Worker->>WASM: Route PCM to multi-threaded SIMD ONNX CPU Engine
-        WASM-->>Normalizer: Raw sub-word tokens with start & end timestamps
-    end
-    Normalizer->>Normalizer: Enforce monotonicity: s_i = max(e_{i-1}, chunk.start)
-    Normalizer->>Normalizer: Enforce minimum slice: e_i = max(s_i + 0.04s, chunk.end)
-    Normalizer-->>UI: Reactive WordToken[] stream with lexical filler tags
+flowchart LR
+    Media["Video/Audio Container"] --> Resample["Web Audio API\n16kHz Mono Resampler"]
+    Resample --> WebGPU["WebGPU Device\n(INT8 Whisper-tiny)"]
+    Resample -.->|Fallback| WASM["WASM SIMD\nONNX Engine"]
+    WebGPU --> Alignment["Monotonic Timestamp\nAlignment Engine"]
+    WASM --> Alignment
+    Alignment --> Tokens["WordToken Stream\n{text, start, end, filler}"]
 ```
 
 - **Step 1: Audio Extraction & Resampling**: The native browser Web Audio API decodes audio streams and resamples them to a uniform **16,000 Hz Mono `Float32Array`** format. Resampling audio contexts are deterministically closed in `finally` blocks to prevent hitting browser concurrency limits.
@@ -245,25 +227,12 @@ flowchart LR
 Editing video in ScarletCut is as simple as editing a text document.
 
 ```mermaid
-sequenceDiagram
-    autonumber
-    actor User as Video Editor
-    participant Transcript as Transcript Editor UI
-    participant Engine as Bijective Timeline Engine Φ(τ)
-    participant Monitor as Video Preview Monitor
-    participant Timeline as Multi-Track Timeline
-
-    User->>Transcript: Selects word tokens or clicks silence pill, presses Backspace
-    Transcript->>Transcript: Sets target tokens to deleted = true (<0.1ms)
-    Transcript->>Engine: Rebuild timeline: buildPlaybackSegments(activeTokens)
-    Engine->>Engine: Coalesce adjacent tokens (boundary gap ≤ 85ms)
-    Engine->>Engine: Enforce 30ms decoder guard (discard micro-blips)
-    Engine->>Engine: Compute piecewise-linear mapping Φ(τ)
-    Engine-->>Monitor: Updated playback segments & new trimmed runtime
-    Monitor->>Monitor: Query getNextValidTime() via O(log N) binary search
-    Monitor->>Monitor: Instantly leaps across cut interval (0 black frames, <0.4ms)
-    Engine-->>Timeline: Recalculate track clip boundaries
-    Timeline->>Timeline: Ripple-shift trailing clips on Video, Audio, Captions, Stickers & Effects
+flowchart LR
+    Select["1. Select Text / Silence\nPress Backspace"] --> Flag["2. Virtual Flag\n(deleted: true)"]
+    Flag --> Coalesce["3. Coalesce Gaps ≤85ms\n& 30ms Decoder Guard"]
+    Coalesce --> Map["4. Bijective Map Φ(τ)\nRecompute Intervals"]
+    Map --> Leap["5. Monitor: O(log N)\nSeek Leap (<0.4ms)"]
+    Map --> Ripple["5. Timeline: Auto-Ripple\nTrailing Multi-Tracks"]
 ```
 
 - **Step 1: Non-Destructive Flagging**: Selecting a word or silence token and pressing <kbd>Backspace</kbd> marks the token as `deleted: true`. The source video file on disk remains entirely untouched and unmodified.
