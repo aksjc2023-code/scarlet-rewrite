@@ -46,28 +46,28 @@ export const StatusFooter: React.FC<StatusFooterProps> = ({
         <span>Scale:</span>
         <button
           type="button"
-          onClick={() => onScaleChange(Math.max(0.5, scale - 0.25))}
+          onClick={() => onScaleChange(Math.max(0.2, Number((scale - 0.2).toFixed(2))))}
           style={{ background: 'none', border: 'none', color: '#A4B0BE', cursor: 'pointer', fontSize: '13px' }}
         >
           —
         </button>
         <input
           type="range"
-          min="0.5"
-          max="3.0"
-          step="0.1"
+          min="0.2"
+          max="3.5"
+          step="0.05"
           value={scale}
           onChange={e => onScaleChange(Number(e.target.value))}
           style={{ width: '90px', accentColor: '#168BFF', height: '4px' }}
         />
         <button
           type="button"
-          onClick={() => onScaleChange(Math.min(3.0, scale + 0.25))}
+          onClick={() => onScaleChange(Math.min(3.5, Number((scale + 0.2).toFixed(2))))}
           style={{ background: 'none', border: 'none', color: '#A4B0BE', cursor: 'pointer', fontSize: '13px' }}
         >
           +
         </button>
-        <span style={{ fontSize: '10px', color: '#636E7B' }}>{scale.toFixed(1)}x</span>
+        <span style={{ fontSize: '10px', color: '#636E7B' }}>{scale < 1 && (scale * 10) % 1 !== 0 ? scale.toFixed(2) : scale.toFixed(1)}x</span>
       </div>
 
       {/* Center: Dynamic Project Length */}
