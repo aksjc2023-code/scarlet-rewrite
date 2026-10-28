@@ -10,7 +10,7 @@
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![WebGPU](https://img.shields.io/badge/AI-WebGPU%20Whisper-orange?logo=webgpu&logoColor=white)](https://www.w3.org/TR/webgpu/)
 [![WebAssembly](https://img.shields.io/badge/Engine-FFmpeg%20WASM-red?logo=webassembly&logoColor=white)](https://ffmpeg.org/)
-[![Tests](https://img.shields.io/badge/Tests-46%2F46%20Passing-brightgreen?logo=node.js&logoColor=white)](#-getting-started--local-development)
+[![Tests](https://img.shields.io/badge/Tests-47%2F47%20Passing-brightgreen?logo=node.js&logoColor=white)](#-getting-started--local-development)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <br />
@@ -19,6 +19,7 @@
   <a href="#-quick-tour--feature-showcase">Feature Tour</a> •
   <a href="#-why-scarletcut-vs-cloud-editors">Why ScarletCut?</a> •
   <a href="#-architectural-overview--data-flow">Architecture</a> •
+  <a href="#-core-engineering-workflows">Engineering Workflows</a> •
   <a href="#-keyboard-shortcuts">Hotkeys</a> •
   <a href="#-technology-stack">Tech Stack</a> •
   <a href="#-performance-benchmarks--self-healing-runtime">Benchmarks</a> •
@@ -119,23 +120,6 @@ ScarletCut includes a built-in production rack of 80 hand-crafted, GPU-accelerat
 
 ---
 
-## ⌨️ Keyboard Shortcuts
-
-Speed up your editing workflow with intuitive keyboard hotkeys:
-
-| Shortcut | Action | Description |
-| :--- | :--- | :--- |
-| <kbd>Space</kbd> | **Play / Pause** | Toggle video and audio playback |
-| <kbd>Backspace</kbd> / <kbd>Delete</kbd> | **Ripple Cut Word** | Prune selected word or silence interval in $<0.4\text{ms}$ |
-| <kbd>Ctrl</kbd> + <kbd>Scroll</kbd> | **Timeline Zoom** | Smooth zoom in / out between $0.2\times$ and $3.5\times$ |
-| <kbd>Shift</kbd> + <kbd>Scroll</kbd> | **Horizontal Pan** | Pan left or right across the multi-track timeline |
-| <kbd>J</kbd> / <kbd>K</kbd> / <kbd>L</kbd> | **Shuttle Transport** | Rewind, pause, or fast-forward playback |
-| <kbd>S</kbd> | **Split Clip** | Slice selected clip cleanly at playhead timestamp |
-| <kbd>M</kbd> | **Mute Track** | Toggle audio mute for the targeted channel |
-| <kbd>L</kbd> | **Lock Track** | Prevent accidental edits or shifts on locked tracks |
-
----
-
 ## 🏗 Architectural Overview & Data Flow
 
 ScarletCut is architected as an isolated monorepo separating mathematical NLE algorithms from UI components and runtime orchestrators.
@@ -172,10 +156,10 @@ scarlet-rewrite/
 │   │   ├── src/
 │   │   │   ├── timelineEngine.ts              # Bijective Φ(τ), binary search leaps, ripple cuts
 │   │   │   ├── fillerAndWhisper.ts            # Monotonic token alignment, silence detection, Whisper factory
-│   │   │   ├── filterGraphBuilder.ts          # FFmpeg -filter_complex builder & ASS subtitle scripts
+│   │   │   ├── filterGraphBuilder.ts          # FFmpeg -filter_complex builder, safe ASS subtitle escaper
 │   │   │   ├── disfluencyCutter.ts            # Sequence tagger, local LLM client & phonetic heuristics
 │   │   │   └── multiTrackAndAudioEnhancement.ts # B-roll anchors, audio ducking, vocal DSP (85Hz HPF)
-│   │   └── test/                              # 46 automated unit & regression tests
+│   │   └── test/                              # 47 automated unit & regression tests
 │   └── UI/                  # High-density dark-mode React 18 component library
 │       └── src/
 │           ├── components/
@@ -190,6 +174,120 @@ scarlet-rewrite/
 │       └── export/wasmExporter.ts             # FFmpeg WebAssembly compiler with WORKERFS RAM mount
 └── docs/images/             # High-resolution screenshots and architectural media
 ```
+
+---
+
+## ⚙️ Core Engineering Workflows
+
+### 1. In-Browser WebGPU Whisper Speech-to-Text Workflow
+ScarletCut executes complete automatic speech recognition (ASR) locally within the user's browser, bypassing all cloud speech APIs.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as User Video Ingestion
+    participant WebAudio as Web Audio API (Resampler)
+    participant Worker as Background Web Worker
+    participant WebGPU as WebGPU Device (INT8 Whisper)
+    participant WASM as WASM SIMD (Fallback)
+    participant Normalizer as Monotonic Alignment Engine
+    participant UI as Transcript Editor UI
+
+    User->>WebAudio: Ingest Media Container (MP4 / WebM / MOV up to 750MB)
+    WebAudio->>Worker: Pipe raw AudioBuffer slice
+    Worker->>Worker: Resample to 16,000 Hz Mono Float32Array PCM
+    Worker-->>WebAudio: Clean temporary AudioContext (finally { audioCtx.close() })
+    Worker->>WebGPU: Allocate Tensor buffer in local GPU VRAM
+    alt WebGPU Available
+        WebGPU->>WebGPU: Run INT8 quantized Whisper-tiny forward pass
+        WebGPU-->>Normalizer: Raw sub-word tokens with start & end timestamps
+    else WebGPU Context Lost or Unsupported
+        Worker->>WASM: Route PCM to multi-threaded SIMD ONNX CPU Engine
+        WASM-->>Normalizer: Raw sub-word tokens with start & end timestamps
+    end
+    Normalizer->>Normalizer: Enforce monotonicity: s_i = max(e_{i-1}, chunk.start)
+    Normalizer->>Normalizer: Enforce minimum slice: e_i = max(s_i + 0.04s, chunk.end)
+    Normalizer-->>UI: Reactive WordToken[] stream with lexical filler tags
+```
+
+- **Step 1: Audio Extraction & Resampling**: The native browser Web Audio API decodes audio streams and resamples them to a uniform **16,000 Hz Mono `Float32Array`** format. Resampling audio contexts are deterministically closed in `finally` blocks to prevent hitting browser concurrency limits.
+- **Step 2: WebGPU Acceleration**: Leveraging `@huggingface/transformers`, the quantized `openai/whisper-tiny.en` (~30MB) model is mounted directly onto the user's GPU via WebGPU buffers, delivering 10x–15x real-time transcription speeds.
+- **Step 3: Resilient WASM SIMD Fallback**: If a device lacks a compatible WebGPU driver or loses context during heavy loads, the pipeline gracefully falls back to multi-threaded CPU SIMD WebAssembly without throwing errors.
+- **Step 4: Monotonic Timestamp Alignment**: Raw sub-word outputs undergo mathematical monotonicity alignment ($s_i = \max(e_{i-1}, \text{chunk}_i.\text{start})$ and $e_i = \max(s_i + 0.04, \text{chunk}_i.\text{end})$) to ensure that timecodes never overlap or run out of order.
+
+---
+
+### 2. Audio Enhancement & Vocal Purification Workflow
+Before dialogue is mixed or transcribed, ScarletCut passes the signal through a deterministic digital signal processing (DSP) chain to eliminate room noise and enhance vocal clarity.
+
+```mermaid
+flowchart LR
+    RawPCM["Raw 16kHz PCM Buffer"] --> SilenceDetector["Silence Span Analyzer\n(RMS Threshold < -42dB, >0.5s)"]
+    SilenceDetector --> SilenceTokens["Inject Non-Destructive\nSilence Pills (# 20.59s)"]
+    
+    RawPCM --> HPF["85Hz High-Pass Filter\n(Biquad: cuts mic rumble & plosives)"]
+    HPF --> PeakingEQ["2.8kHz Peaking EQ\n(Enhances vocal presence)"]
+    PeakingEQ --> NoiseGate["Soft RMS Noise Gate\n(Attenuates hiss & ambient room noise)"]
+    NoiseGate --> PurifiedDialogue["Purified Dialogue Track"]
+    
+    PurifiedDialogue --> DuckingEngine["Speech-Triggered Ducking Engine\n(Attenuates B-Roll music to 15% during speech)"]
+```
+
+- **Acoustic Silence Detection**: The engine performs a single-pass energy analysis across the PCM waveform. Silence spans exceeding $0.5\text{s}$ are identified and injected into the transcript as clickable, non-destructive silence tokens with exact duration indicators (`# 20.59s`, `# 1.63s`).
+- **85Hz High-Pass Biquad Filter**: Attenuates sub-audible table vibrations, air conditioner drone, and microphone handling noise below human vocal fundamentals without coloring speech tone.
+- **2.8kHz Peaking EQ**: Adds a gentle bell curve boost centered at 2.8kHz to enhance vocal articulation and presence.
+- **Soft RMS Noise Gate**: Smoothly suppresses room reverberation, laptop fan hum, and electrical noise floor between spoken words.
+- **Dynamic Dialogue Ducking**: When background music is present, active speech tokens continuously trigger a volume ducking envelope that attenuates background tracks to **$15\%$ gain** ($0.15\times$) with a $250\text{ms}$ smooth ramp-up and $400\text{ms}$ ramp-down.
+
+---
+
+### 3. Text Select-to-Delete Workflow (Sub-Millisecond Ripple Engine)
+Editing video in ScarletCut is as simple as editing a text document.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor User as Video Editor
+    participant Transcript as Transcript Editor UI
+    participant Engine as Bijective Timeline Engine Φ(τ)
+    participant Monitor as Video Preview Monitor
+    participant Timeline as Multi-Track Timeline
+
+    User->>Transcript: Selects word tokens or clicks silence pill, presses Backspace
+    Transcript->>Transcript: Sets target tokens to deleted = true (<0.1ms)
+    Transcript->>Engine: Rebuild timeline: buildPlaybackSegments(activeTokens)
+    Engine->>Engine: Coalesce adjacent tokens (boundary gap ≤ 85ms)
+    Engine->>Engine: Enforce 30ms decoder guard (discard micro-blips)
+    Engine->>Engine: Compute piecewise-linear mapping Φ(τ)
+    Engine-->>Monitor: Updated playback segments & new trimmed runtime
+    Monitor->>Monitor: Query getNextValidTime() via O(log N) binary search
+    Monitor->>Monitor: Instantly leaps across cut interval (0 black frames, <0.4ms)
+    Engine-->>Timeline: Recalculate track clip boundaries
+    Timeline->>Timeline: Ripple-shift trailing clips on Video, Audio, Captions, Stickers & Effects
+```
+
+- **Step 1: Non-Destructive Flagging**: Selecting a word or silence token and pressing <kbd>Backspace</kbd> marks the token as `deleted: true`. The source video file on disk remains entirely untouched and unmodified.
+- **Step 2: Micro-Gap Coalescing ($\le 85\text{ms}$)**: Consecutive active words with acoustic pauses shorter than $85\text{ms}$ coalesce into a single playback segment, preserving natural syllable cadence and preventing jagged edits.
+- **Step 3: Hardware Decoder Guard ($\ge 30\text{ms}$)**: Any segment shorter than $30\text{ms}$ is automatically filtered out to prevent hardware media decoders from stalling or generating black frames.
+- **Step 4: Sub-Millisecond $O(\log N)$ Seek Leap**: During playback or scrubbing, when the playhead approaches a cut point, [`getNextValidTime()`](file:///c:/Users/ankit/OneDrive/Desktop/scarlet%20rewrite/packages/BACKEND-CORE/src/timelineEngine.ts#L187) uses an unsigned right-shift binary search (`(low + high) >>> 1`) to leap over the deleted range in **$<0.4\text{ms}$**, maintaining seamless playback without re-encoding.
+- **Step 5: Multi-Track Ripple Cascade**: Trailing clips across all 5 timeline tracks automatically ripple left by the exact duration of the excised segment, with locked tracks remaining anchored.
+
+---
+
+## ⌨️ Keyboard Shortcuts
+
+Speed up your editing workflow with intuitive keyboard hotkeys:
+
+| Shortcut | Action | Description |
+| :--- | :--- | :--- |
+| <kbd>Space</kbd> | **Play / Pause** | Toggle video and audio playback |
+| <kbd>Backspace</kbd> / <kbd>Delete</kbd> | **Ripple Cut Word** | Prune selected word or silence interval in $<0.4\text{ms}$ |
+| <kbd>Ctrl</kbd> + <kbd>Scroll</kbd> | **Timeline Zoom** | Smooth zoom in / out between $0.2\times$ and $3.5\times$ |
+| <kbd>Shift</kbd> + <kbd>Scroll</kbd> | **Horizontal Pan** | Pan left or right across the multi-track timeline |
+| <kbd>J</kbd> / <kbd>K</kbd> / <kbd>L</kbd> | **Shuttle Transport** | Rewind, pause, or fast-forward playback |
+| <kbd>S</kbd> | **Split Clip** | Slice selected clip cleanly at playhead timestamp |
+| <kbd>M</kbd> | **Mute Track** | Toggle audio mute for the targeted channel |
+| <kbd>L</kbd> | **Lock Track** | Prevent accidental edits or shifts on locked tracks |
 
 ---
 
@@ -242,7 +340,7 @@ pnpm install
 
 ### 2. Run Automated Verification Tests
 ```bash
-# Run the 46 unit & integration tests
+# Run the 47 unit & integration tests
 pnpm test
 ```
 
