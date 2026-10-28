@@ -10,7 +10,7 @@
 [![Vite](https://img.shields.io/badge/Vite-6.0-646CFF?logo=vite&logoColor=white)](https://vitejs.dev/)
 [![WebGPU](https://img.shields.io/badge/AI-WebGPU%20Whisper-orange?logo=webgpu&logoColor=white)](https://www.w3.org/TR/webgpu/)
 [![WebAssembly](https://img.shields.io/badge/Engine-FFmpeg%20WASM-red?logo=webassembly&logoColor=white)](https://ffmpeg.org/)
-[![Tests](https://img.shields.io/badge/Tests-46%2F46%20Passing-brightgreen?logo=node.js&logoColor=white)](#-automated-test-suite)
+[![Tests](https://img.shields.io/badge/Tests-46%2F46%20Passing-brightgreen?logo=node.js&logoColor=white)](#-getting-started--local-development)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 <br />
@@ -19,9 +19,9 @@
   <a href="#-quick-tour--feature-showcase">Feature Tour</a> •
   <a href="#-why-scarletcut-vs-cloud-editors">Why ScarletCut?</a> •
   <a href="#-architectural-overview--data-flow">Architecture</a> •
-  <a href="#-mathematical-formalization-of-the-timeline-engine">Timeline Math</a> •
   <a href="#-keyboard-shortcuts">Hotkeys</a> •
   <a href="#-technology-stack">Tech Stack</a> •
+  <a href="#-performance-benchmarks--self-healing-runtime">Benchmarks</a> •
   <a href="#-getting-started--local-development">Getting Started</a>
 </p>
 
@@ -193,41 +193,6 @@ scarlet-rewrite/
 
 ---
 
-## 📐 Mathematical Formalization of the Timeline Engine
-
-ScarletCut guarantees frame-perfect audio/video synchronization across arbitrarily many cuts without modifying the raw media file during editing.
-
-### 1. Token Coalescing Equivalence Relation
-Given an ordered sequence of transcribed tokens $T = \langle t_1, t_2, \dots, t_n \rangle$ where each token is a tuple $t_i = (s_i, e_i, d_i)$ with source start time $s_i$, end time $e_i$, and deletion flag $d_i \in \{0, 1\}$.
-
-The set of active tokens is:
-$$K = \{ t_i \in T \mid d_i = 0 \}$$
-
-Two consecutive tokens $t_{i_r}, t_{i_{r+1}} \in K$ coalesce into a single continuous playback segment $S_k = [a_k, b_k]$ if and only if:
-1. No intervening tokens were deleted: $i_{r+1} - i_r = 1$
-2. The acoustic boundary gap does not exceed the merge threshold:
-$$s_{i_{r+1}} - e_{i_r} \le \epsilon_{\text{merge}} \quad (\epsilon_{\text{merge}} = 0.085\text{ s})$$
-
-Any segment shorter than the hardware decoder slice limit is discarded to prevent decoding pipeline stalls:
-$$\Delta(S_k) = b_k - a_k \ge \Delta_{\min} \quad (\Delta_{\min} = 0.030\text{ s})$$
-
-### 2. Bijective Virtual Timeline Mapping $\Phi(\tau)$
-Let $\mathcal{S} = \langle S_1, S_2, \dots, S_m \rangle$ be the coalesced playback segments where $S_k = [a_k, b_k]$ in source seconds.
-
-The virtual timeline is defined over $[0, V_{\text{total}}]$ where:
-$$v_1^{\text{start}} = 0, \quad v_k^{\text{start}} = \sum_{j=1}^{k-1} (b_j - a_j) \quad (k > 1)$$
-$$v_k^{\text{end}} = v_k^{\text{start}} + (b_k - a_k), \quad V_{\text{total}} = v_m^{\text{end}}$$
-
-The forward mapping $\Phi: \bigcup_{k=1}^m [a_k, b_k] \to [0, V_{\text{total}}]$ projects raw media time $\tau$ onto virtual playback time:
-$$\Phi(\tau) = v_k^{\text{start}} + (\tau - a_k) \quad \text{for } \tau \in [a_k, b_k)$$
-
-The inverse mapping $\Phi^{-1}: [0, V_{\text{total}}] \to \bigcup_{k=1}^m [a_k, b_k]$ determines the source seek position:
-$$\Phi^{-1}(v) = a_k + (v - v_k^{\text{start}}) \quad \text{for } v \in [v_k^{\text{start}}, v_k^{\text{end}})$$
-
-When seeking or scrubbing, binary search locating of $S_k$ executes in **$O(\log m)$**, allowing instantaneous skipping across deleted segments without black frames or stutter.
-
----
-
 ## ⚡ Technology Stack
 
 | Layer | Technology | Version | Purpose & Architectural Role |
@@ -256,67 +221,6 @@ When seeking or scrubbing, binary search locating of $S_k$ executes in **$O(\log
 | **WASM Linear Memory Protection** | $<750\text{MB}$ heap footprint | Deterministic `ffmpeg.deleteFile()` and zero-copy `WORKERFS` mounts |
 | **WebGPU Context Recovery** | $100\%$ Fallback Guarantee | Seamlessly switches to multi-threaded SIMD CPU WASM if GPU drops |
 | **Cross-Origin Isolation** | `COOP: same-origin`<br />`COEP: credentialless` | Unlocks `SharedArrayBuffer` threading without third-party asset blocking |
-
----
-
-## 🧪 Automated Test Suite
-
-ScarletCut includes a comprehensive test suite of **46 unit and regression tests** covering all mathematical, phonetic, and transcoding subsystems:
-
-```bash
-pnpm test
-```
-
-```text
-✔ 1. predictDisfluentIndices returns empty array for empty tokens (4.21ms)
-✔ 2. predictDisfluentIndices sends correctly formatted prompt and parses clean JSON (29.48ms)
-✔ 3. predictDisfluentIndices extracts JSON array from markdown-fenced LLM output (0.71ms)
-✔ 4. predictDisfluentIndices throws on HTTP error response when fallback is false (1.21ms)
-✔ 5. predictDisfluentIndices gracefully falls back to local heuristic on network failure (1.90ms)
-✔ 6. detectDisfluenciesHeuristic detects stutters, cut-offs, fillers, and false starts (0.51ms)
-✔ 7. getMergedCutRanges merges adjacent cuts within tolerance and splits across gaps (0.49ms)
-✔ 8. getMergedCutRanges handles empty indices and out-of-bounds indices gracefully (0.23ms)
-✔ 9. Extended punctuation stripping handles ellipses, em-dashes, and smart quotes (1.70ms)
-✔ 10. Hard fillers vs discourse markers and multi-word phrase matching (0.75ms)
-✔ 11. Non-destructive pause tokens match exact silence duration and enforce strict mediaId (0.54ms)
-✔ 12. Purge options protect discourse markers by default and compute exact savings (0.52ms)
-✔ 13. Resample PCM with anti-aliasing preserves 440Hz tone and rejects invalid sample rates (14.92ms)
-✔ 14. Timestamp monotonicity alignment rejects empty chunks and clamps out-of-order timestamps (0.62ms)
-✔ 15. Device-aware Whisper runner factory and GPU-error specific fallback (2.67ms)
-✔ 16. decodeAndResampleTo16kHzMono invokes audio context factories and decodes buffer (1.04ms)
-✔ 17. formatAssTimestamp converts seconds to H:MM:SS.cs standard ASS format (1.56ms)
-✔ 18. generateAssSubtitleScript filters deleted tokens and maps virtual timestamps (1.98ms)
-✔ 19. generateConcatDemuxerList generates valid ffconcat manifest with in/out points (0.32ms)
-✔ 20. generateFfmpegFilterComplex builds single-pass concat graph across multiple cuts (0.45ms)
-✔ 21. Vocal purifier DSP, WAV RIFF TTS overdubbing, and TF-IDF operate deterministically (6.48ms)
-✔ 22. calculateSkipRanges returns empty for unedited words and merges contiguous ranges (1.48ms)
-✔ 23. computeKeepRanges computes complement of skip ranges with sliver filtering (0.51ms)
-✔ 24. buildTrimConcatFilter generates valid filter_complex with PTS-STARTPTS concat (0.46ms)
-✔ 25. generateAssSubtitleScript renders title and sticker overlays into ASS script events (0.42ms)
-✔ 26. recalculateAnchoredTimestamps dynamically shifts B-Roll and Titles across pruned words (1.89ms)
-✔ 27. insertBRollOnKeywordSelection & insertTitleOnKeywordSelection bind to word boundaries (1.58ms)
-✔ 28. buildFFmpegMultiTrackArgs builds valid complex filtergraph with overlays & audio ducking (0.92ms)
-✔ 29. cleanseAudioWaveform & segmentSpeechAndIdentifySilences detect silence spans (12.90ms)
-✔ 30. generateDisfluencyEdl unions overlapping silence and filler ranges with 15ms padding (0.58ms)
-✔ 31. executeAudioEnhancementWorkflow checks transcript reuse and generates when missing (3.17ms)
-✔ 32. classifyFdtDisfluencies performs context-aware BIO sequence labeling (0.60ms)
-✔ 33. classifyFdtDisfluencies integrates ONNX sequence tagger with exact boundary mappings (1.37ms)
-✔ 34. Unsorted input and zero/negative length tokens normalization (4.75ms)
-✔ 35. Micro-gap coalescing (<= 85ms merges, > 85ms splits) (0.49ms)
-✔ 36. Deleted first, middle, and last tokens with ripple virtual mapping (0.44ms)
-✔ 37. 30ms hardware decoder fault guard discards micro-blips (0.24ms)
-✔ 38. Binary search leap across cut intervals and boundary epsilon (0.77ms)
-✔ 39. Bijective mapping invertibility between source and virtual domains (0.50ms)
-✔ 40. Domain validators accept valid data and throw on invalid data (1.06ms)
-✔ 41. Asset-scoped ripple segments isolates cuts per media asset (0.33ms)
-✔ 42. Non-deleted pauses coalesce into continuous playback without seek jumps (0.28ms)
-✔ 43. Marking pause as deleted performs virtual ripple cut across the silence (0.42ms)
-✔ 44. Synthetic overlay clips allow stretching without crash (0.26ms)
-✔ 45. rippleCutTimeRange splits mid-clip chunk, trims head/tail, drops enclosed, and ripples (0.52ms)
-✔ 46. rippleCutTimeRange respects locked tracks (0.76ms)
-
-ℹ tests 46 | pass 46 | fail 0 | duration_ms ~425ms
-```
 
 ---
 
