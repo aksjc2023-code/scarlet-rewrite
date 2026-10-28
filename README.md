@@ -125,26 +125,12 @@ ScarletCut includes a built-in production rack of 80 hand-crafted, GPU-accelerat
 ScarletCut is architected as an isolated monorepo separating mathematical NLE algorithms from UI components and runtime orchestrators.
 
 ```mermaid
-flowchart TD
-    subgraph Browser ["Browser Client Sandbox (Zero Server)"]
-        UserMedia["User Video / Audio Ingestion"] --> AudioDecode["Native Web Audio API\n(16kHz Mono Resampler)"]
-        
-        AudioDecode --> WebGPUWhisper["WebGPU Whisper ASR\n(@huggingface/transformers INT8)"]
-        WebGPUWhisper -.->|Fallback if no WebGPU| WasmWhisper["WASM SIMD ONNX Engine"]
-        
-        WebGPUWhisper --> Tokens["Monotonic Word Token Stream\n{text, startSec, endSec, isFiller}"]
-        
-        Tokens --> Disfluency["Disfluency Classifier\n(LLM / Heuristic Regex)"]
-        Disfluency --> Pruning["Interactive Word / Silence Pruning"]
-        
-        Pruning --> TimelineEngine["Timeline Engine: Bijective Mapping Φ(τ)\n• Micro-gap coalescing (≤85ms)\n• 30ms hardware decoder guard\n• O(log N) binary search seek leap"]
-        
-        TimelineEngine --> UIComponents["UI Layer (@astral/ui-editor)\n• MultiTrackTimeline (60fps DOM transform)\n• VideoPreviewMonitor (CSS Filters & Overlays)\n• EffectsGridView (80 Presets)"]
-        
-        TimelineEngine --> ExportPipeline["Export Pipeline (apps/webster)\n• WORKERFS RAM Virtual Filesystem\n• Fast Stream-Copy (-c copy)\n• ASS Subtitle & FilterGraph Transcode"]
-        
-        ExportPipeline --> OutputBlob["Final Exported Video (.mp4)\n(Downloaded directly to local disk)"]
-    end
+flowchart LR
+    Ingest["1. Ingestion\n• Local File / Blob\n• Zero Cloud Egress"] --> ASR["2. Whisper ASR\n• 16kHz Web Audio\n• WebGPU INT8 Inference"]
+    ASR --> Prune["3. Transcript\n• Word-Token Stream\n• Disfluency Purging"]
+    Prune --> Engine["4. Timeline Engine\n• Bijective Map Φ(τ)\n• O(log N) Seek Leap"]
+    Engine --> UI["5. Editing UI\n• 5 Tracks (60fps)\n• 80 Live Presets"]
+    Engine --> Export["6. WASM Export\n• WORKERFS RAM Mount\n• Fast Stream-Copy (-c copy)"]
 ```
 
 ### Monorepo Packages Breakdown
