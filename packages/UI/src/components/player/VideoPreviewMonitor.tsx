@@ -2079,29 +2079,49 @@ export const VideoPreviewMonitor: React.FC<VideoPreviewMonitorProps> = ({
           paddingTop: '4px',
         }}
       >
-        {/* Left: Timecode Readout with Total Trimmed Video Length */}
-        <div style={{ display: 'flex', alignItems: 'baseline', fontFamily: "'JetBrains Mono', monospace", gap: '2px' }}>
+        {/* Left: Timecode Readout with Current Playtime out of Trimmed Video Length */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+          <div style={{ display: 'flex', alignItems: 'baseline', fontFamily: "'JetBrains Mono', monospace", gap: '2px' }}>
+            <span
+              id="player-timecode-current"
+              data-testid="player-timecode-current"
+              style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}
+              title="Current playtime"
+            >
+              {timecode.main}
+            </span>
+            <span style={{ fontSize: '11px', color: '#636E7B', marginRight: '6px' }}>
+              {timecode.ms}
+            </span>
+            <span style={{ fontSize: '13px', color: '#8A96A6', margin: '0 2px' }}>/</span>
+            <span
+              id="player-timecode-duration"
+              data-testid="player-timecode-duration"
+              style={{ fontSize: '14px', fontWeight: 500, color: '#2ED573', marginLeft: '4px' }}
+              title="Total video length after cuts & trimming"
+            >
+              {durationTimecode.main}
+            </span>
+            <span style={{ fontSize: '11px', color: '#636E7B', marginLeft: '2px' }}>
+              {durationTimecode.ms}
+            </span>
+          </div>
           <span
-            id="player-timecode-current"
-            data-testid="player-timecode-current"
-            style={{ fontSize: '14px', fontWeight: 600, color: '#FFFFFF' }}
+            style={{
+              fontSize: '9px',
+              fontFamily: "'JetBrains Mono', monospace",
+              fontWeight: 600,
+              backgroundColor: 'rgba(46, 213, 115, 0.12)',
+              color: '#2ED573',
+              border: '1px solid rgba(46, 213, 115, 0.3)',
+              padding: '1px 5px',
+              borderRadius: '4px',
+              textTransform: 'uppercase',
+              letterSpacing: '0.04em',
+            }}
+            title="Current playback out of trimmed video duration"
           >
-            {timecode.main}
-          </span>
-          <span style={{ fontSize: '11px', color: '#636E7B', marginRight: '6px' }}>
-            {timecode.ms}
-          </span>
-          <span style={{ fontSize: '13px', color: '#8A96A6', margin: '0 2px' }}>/</span>
-          <span
-            id="player-timecode-duration"
-            data-testid="player-timecode-duration"
-            style={{ fontSize: '14px', fontWeight: 500, color: '#2ED573', marginLeft: '4px' }}
-            title="Total video length after cuts & trimming"
-          >
-            {durationTimecode.main}
-          </span>
-          <span style={{ fontSize: '11px', color: '#636E7B', marginLeft: '2px' }}>
-            {durationTimecode.ms}
+            Trimmed
           </span>
         </div>
 

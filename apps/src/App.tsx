@@ -289,6 +289,21 @@ export const App: React.FC = () => {
     return getProjectDuration(clips, 30.0);
   }, [clips]);
 
+  // Original untrimmed source video duration for the active asset / clip
+  const originalVideoDuration = useMemo(() => {
+    const asset = mediaAssets.find(a => a.id === activeMediaId || a.id === previewAssetId);
+    if (asset?.duration && asset.duration > 0) return asset.duration;
+    if (activeClip) {
+      if (typeof activeClip.sourceOut === 'number' && typeof activeClip.sourceIn === 'number' && activeClip.sourceOut > activeClip.sourceIn) {
+        return activeClip.sourceOut - activeClip.sourceIn;
+      }
+      if (typeof activeClip.duration === 'number' && activeClip.duration > 0) {
+        return activeClip.duration;
+      }
+    }
+    return projectDuration;
+  }, [mediaAssets, activeMediaId, previewAssetId, activeClip, projectDuration]);
+
   const videoClips = useMemo(() => clips.filter(c => c.trackId === 'track_video'), [clips]);
   const lastVideoEnd = useMemo(() => {
     if (videoClips.length === 0) return 0;
@@ -2682,9 +2697,9 @@ export const App: React.FC = () => {
                   padding: '2px 7px',
                   borderRadius: '9999px',
                 }}
-                title="Total video duration after trimming & ripple cuts"
+                title="Original source video length before cuts & trimming"
               >
-                ⏱ {Math.floor(projectDuration / 60)}:{String(Math.floor(projectDuration % 60)).padStart(2, '0')}
+                ⏱ Original: {Math.floor(originalVideoDuration / 60)}:{String(Math.floor(originalVideoDuration % 60)).padStart(2, '0')}
               </span>
             </div>
             <button
