@@ -131,6 +131,10 @@ flowchart LR
     Prune --> Engine["4. Timeline Engine\n• Bijective Map Φ(τ)\n• O(log N) Seek Leap"]
     Engine --> UI["5. Editing UI\n• 5 Tracks (60fps)\n• 80 Live Presets"]
     Engine --> Export["6. WASM Export\n• WORKERFS RAM Mount\n• Fast Stream-Copy (-c copy)"]
+
+    UI ~~~ Pad0["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    Export ~~~ Pad0
+    style Pad0 fill:none,stroke:none,color:none
 ```
 
 ### Monorepo Packages Breakdown
@@ -176,6 +180,9 @@ flowchart LR
     WebGPU --> Alignment["Monotonic Timestamp\nAlignment Engine"]
     WASM --> Alignment
     Alignment --> Tokens["WordToken Stream\n{text, start, end, filler}"]
+
+    Tokens ~~~ Pad1["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    style Pad1 fill:none,stroke:none,color:none
 ```
 
 - **Step 1: Audio Extraction & Resampling**: The native browser Web Audio API decodes audio streams and resamples them to a uniform **16,000 Hz Mono `Float32Array`** format. Resampling audio contexts are deterministically closed in `finally` blocks to prevent hitting browser concurrency limits.
@@ -199,6 +206,10 @@ flowchart LR
     NoiseGate --> PurifiedDialogue["Purified Dialogue Track"]
     
     PurifiedDialogue --> DuckingEngine["Speech-Triggered Ducking Engine\n(Attenuates B-Roll music to 15% during speech)"]
+
+    SilenceTokens ~~~ Pad2["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    DuckingEngine ~~~ Pad2
+    style Pad2 fill:none,stroke:none,color:none
 ```
 
 - **Acoustic Silence Detection**: The engine performs a single-pass energy analysis across the PCM waveform. Silence spans exceeding $0.5\text{s}$ are identified and injected into the transcript as clickable, non-destructive silence tokens with exact duration indicators (`# 20.59s`, `# 1.63s`).
@@ -219,6 +230,10 @@ flowchart LR
     Coalesce --> Map["4. Bijective Map Φ(τ)\nRecompute Intervals"]
     Map --> Leap["5. Monitor: O(log N)\nSeek Leap (<0.4ms)"]
     Map --> Ripple["5. Timeline: Auto-Ripple\nTrailing Multi-Tracks"]
+
+    Leap ~~~ Pad3["&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;"]
+    Ripple ~~~ Pad3
+    style Pad3 fill:none,stroke:none,color:none
 ```
 
 - **Step 1: Non-Destructive Flagging**: Selecting a word or silence token and pressing <kbd>Backspace</kbd> marks the token as `deleted: true`. The source video file on disk remains entirely untouched and unmodified.
