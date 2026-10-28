@@ -36,6 +36,7 @@ import {
   FilterClipData,
   getSummarizedKeyTokenIds,
   predictDisfluentIndices,
+  purgeFillersAndPauses,
   BRollClip,
   TitleClip,
   AudioTrackConfig,
@@ -172,6 +173,7 @@ export const App: React.FC = () => {
   const [isSubtitlesActive, setIsSubtitlesActive] = useState(true);
   const [masterVolume, setMasterVolume] = useState(100);
   const [isProcessingEnhancement, setIsProcessingEnhancement] = useState(false);
+  const [isPurgingFillers, setIsPurgingFillers] = useState(false);
 
   // Undo / Redo History Stacks
   const [historyStack, setHistoryStack] = useState<{ tokensByMedia: Record<string, WordToken[]>; clips: TimelineClip[] }[]>([]);
@@ -657,6 +659,83 @@ export const App: React.FC = () => {
       };
     });
   }, [pushHistory, tokensByMedia, clips, activeTranscriptMediaId]);
+
+  // 1-Click Purge Fillers & Pauses using Local LLM (or built-in heuristic fallback)
+  const handlePurgeFillers = useCallback(async () => {
+    const currentList = tokensByMedia[activeTranscriptMediaId] ?? [];
+    if (currentList.length === 0) return;
+
+    setIsPurgingFillers(true);
+    pushHistory(tokensByMedia, clips);
+
+    try {
+      // 1. First run local LLM disfluency predictor (with automatic offline heuristic fallback)
+      let flaggedIndices: number[] = [];
+      try {
+        flaggedIndices = await predictDisfluentIndices(currentList, {
+          fallbackToHeuristic: true,
+          timeoutMs: 2500,
+        });
+      } catch (err) {
+        console.warn('[PurgeFillers] Local LLM unavailable, using built-in filler & pause heuristic:', err);
+      }
+
+      const flaggedIdSet = new Set(flaggedIndices.map(idx => currentList[idx]?.id).filter(Boolean));
+
+      // 2. Also incorporate standard lexical fillers and pauses (>0.5s) via purgeFillersAndPauses
+      const standardPurge = purgeFillersAndPauses(currentList, {
+        includeHardFillers: true,
+        includePauses: true,
+        includeDiscourseMarkers: false,
+      });
+
+      // 3. Union flagged LLM indices and standard purge results
+      let totalPurgedCount = 0;
+      let totalPurgedDuration = 0;
+
+      const updatedTokens = standardPurge.updatedTokens.map(t => {
+        const isFlaggedByLlm = flaggedIdSet.has(t.id);
+        if ((isFlaggedByLlm || t.deleted) && !currentList.find(c => c.id === t.id)?.deleted) {
+          totalPurgedCount++;
+          totalPurgedDuration += (t.end - t.start);
+          return { ...t, deleted: true };
+        }
+        return t;
+      });
+
+      setTokensByMedia(prev => ({
+        ...prev,
+        [activeTranscriptMediaId]: updatedTokens,
+      }));
+
+      // Automatically recalculate anchored multi-track B-Roll and Title timestamps
+      if (Object.keys(bRollClips).length > 0 || Object.keys(titleClips).length > 0) {
+        const multiTrackState: MultiTrackTimelineState = {
+          tracks: {
+            aRollTrackId: 'track_video',
+            bRollTracks: ['track_stickers'],
+            titleTracks: ['track_title'],
+            audioTracks: ['track_audio'],
+          },
+          bRollClips,
+          titleClips,
+          audioConfigs: { [audioConfig.id]: audioConfig },
+          transcriptWords: updatedTokens,
+        };
+        const { bRolls, titles } = recalculateAnchoredTimestamps(multiTrackState);
+        setBRollClips(bRolls);
+        setTitleClips(titles);
+      }
+
+      setTelemetry(prev => ({
+        ...prev,
+        timeSavedSec: Number((prev.timeSavedSec + totalPurgedDuration).toFixed(2)),
+        recoveryLog: `[Purge Fillers] Purged ${totalPurgedCount} filler words & pauses (${totalPurgedDuration.toFixed(2)}s saved) via Local LLM / speech analyzer.`,
+      }));
+    } finally {
+      setIsPurgingFillers(false);
+    }
+  }, [pushHistory, tokensByMedia, clips, activeTranscriptMediaId, bRollClips, titleClips, audioConfig]);
 
   // Restore all cut tokens
   const handleRestoreAll = useCallback(() => {
@@ -2472,6 +2551,8 @@ export const App: React.FC = () => {
               transcriptionError={transcriptionError}
               onClearTranscriptionError={() => setTranscriptionError(null)}
               onSummarizeKeyPoints={handleSummarizeKeyPoints}
+              onPurgeFillers={handlePurgeFillers}
+              isPurgingFillers={isPurgingFillers}
               onAutoClean={handleAutoClean}
               onInsertBRoll={handleInsertBRollFromTranscript}
               onInsertTitle={handleInsertTitleFromTranscript}

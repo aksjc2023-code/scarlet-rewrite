@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { WordToken, MediaAsset } from '@astral/core';
 import { ScarletButton } from '../common/ScarletButton';
-import { IconSparkles } from '../common/ScarletIcons';
+import { IconSparkles, IconLightning } from '../common/ScarletIcons';
 import { AutoCleanButton } from './AutoCleanButton';
 
 export interface TranscriptEditorViewProps {
@@ -24,6 +24,8 @@ export interface TranscriptEditorViewProps {
   transcriptionError?: string | null;
   onClearTranscriptionError?: () => void;
   onSummarizeKeyPoints?: () => void;
+  onPurgeFillers?: () => void;
+  isPurgingFillers?: boolean;
   onAutoClean?: () => Promise<void>;
   onInsertBRoll?: (selectedWordIds: string[], sourceFile: File) => void;
   onInsertTitle?: (selectedWordIds: string[], titleText: string) => void;
@@ -50,6 +52,8 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
   transcriptionError,
   onClearTranscriptionError,
   onSummarizeKeyPoints,
+  onPurgeFillers,
+  isPurgingFillers = false,
   onAutoClean,
   onInsertBRoll,
   onInsertTitle,
@@ -603,6 +607,21 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
               onClick={onRestoreAllTokens}
             >
               Restore All ({deletedCount})
+            </ScarletButton>
+          )}
+
+          {onPurgeFillers && (
+            <ScarletButton
+              id="btn-purge-fillers"
+              data-testid="btn-purge-fillers"
+              variant="additional-v1"
+              size="sm"
+              icon={<IconLightning size={14} color="#FFA502" />}
+              onClick={onPurgeFillers}
+              disabled={isPurgingFillers || tokens.length === 0}
+              title="Purge speech disfluencies, fumbles, and pauses (>0.5s) using Local LLM (or built-in heuristic fallback)"
+            >
+              {isPurgingFillers ? 'Purging Fillers (LLM)...' : `Purge Fillers & Pauses (${hardFillerCount + pauseCount})`}
             </ScarletButton>
           )}
 
