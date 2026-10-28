@@ -1115,6 +1115,124 @@ export const TranscriptEditorView: React.FC<TranscriptEditorViewProps> = ({
         })}
       </div>
       )}
+
+      {/* Floating Context Toolbar positioned directly above highlighted words */}
+      {floatingToolbarPos && selectedTokenIds.size > 0 && (
+        <div
+          id="floating-transcript-selection-toolbar"
+          data-testid="floating-transcript-selection-toolbar"
+          onClick={e => e.stopPropagation()}
+          style={{
+            position: 'absolute',
+            left: `${floatingToolbarPos.x}px`,
+            top: `${floatingToolbarPos.y}px`,
+            zIndex: 999,
+            backgroundColor: '#1E232B',
+            border: '1px solid #168BFF',
+            borderRadius: '8px',
+            padding: '4px 8px',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            boxShadow: '0 8px 24px rgba(0, 0, 0, 0.75), 0 0 12px rgba(22, 139, 255, 0.3)',
+            animation: 'fadeIn 0.15s ease',
+          }}
+        >
+          {onInsertBRoll && (
+            <button
+              id="btn-floating-insert-broll"
+              data-testid="btn-floating-insert-broll"
+              type="button"
+              onClick={() => bRollFileInputRef.current?.click()}
+              style={{
+                backgroundColor: 'rgba(0, 240, 255, 0.15)',
+                border: '1px solid #00F0FF',
+                color: '#00F0FF',
+                borderRadius: '5px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Insert B-Roll anchored to selected word tokens"
+            >
+              🎬 + Insert B-Roll
+            </button>
+          )}
+
+          {onInsertTitle && (
+            <button
+              id="btn-floating-insert-title"
+              data-testid="btn-floating-insert-title"
+              type="button"
+              onClick={handleInsertTitle}
+              style={{
+                backgroundColor: 'rgba(255, 211, 42, 0.15)',
+                border: '1px solid #FFD32A',
+                color: '#FFD32A',
+                borderRadius: '5px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Add Title / Lower Third card anchored to selected words"
+            >
+              🔤 + Add Title
+            </button>
+          )}
+
+          {onDuckAudioKeywords && (
+            <button
+              id="btn-floating-duck-audio"
+              data-testid="btn-floating-duck-audio"
+              type="button"
+              onClick={handleDuckAudio}
+              style={{
+                backgroundColor: 'rgba(165, 94, 234, 0.15)',
+                border: '1px solid #A55EEA',
+                color: '#A55EEA',
+                borderRadius: '5px',
+                padding: '3px 8px',
+                fontSize: '11px',
+                fontWeight: 600,
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '4px',
+              }}
+              title="Mark selected keyword span for aggressive audio ducking"
+            >
+              🔊 + Duck Audio Here
+            </button>
+          )}
+
+          <button
+            id="btn-floating-cut-selected"
+            data-testid="btn-floating-cut-selected"
+            type="button"
+            onClick={handleCutSelected}
+            style={{
+              backgroundColor: 'rgba(255, 71, 87, 0.15)',
+              border: '1px solid #FF4757',
+              color: '#FF4757',
+              borderRadius: '5px',
+              padding: '3px 8px',
+              fontSize: '11px',
+              fontWeight: 600,
+              cursor: 'pointer',
+            }}
+          >
+            Cut ({selectedTokenIds.size})
+          </button>
+        </div>
+      )}
     </div>
   );
 };
